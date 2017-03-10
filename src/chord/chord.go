@@ -2,51 +2,51 @@
 package chord
 
 import (
-	"crypto/sha256"
 	"net"
 	"sync"
+	"util"
 )
 
+// Chord represents single Chord instance.
 type Chord struct {
 	mu          sync.Mutex
 	isIterative bool
 
 	// predecessor
-	predecessor *net.IP
+	predecessor *util.Node
 
 	// finger table
-	ftable []*net.IP
+	ftable []*util.Node
 
 	// successor list
-	slist []*net.IP
-}
-
-func hash(v string) {
-
+	slist []*util.Node
 }
 
 func (ch *Chord) recursiveLookup(key string) (net.IP, error) {
-
+	return nil, nil
 }
 
 func (ch *Chord) iterativeLookup(key string) (net.IP, error) {
-
+	return nil, nil
 }
 
 func (ch *Chord) Lookup(key string) (net.IP, error) {
 	if ch.isIterative {
-		return iterativeLookup(key)
+		return ch.iterativeLookup(key)
 	}
-	return recursiveLookup(key)
+	return ch.recursiveLookup(key)
 }
 
 // KeyRange returns start and end of key range this chord instance is
-// responsible for.
+// responsible for. It is possible for the end of range to be lower value than
+// the start of the range if the range wraps around key space.
 func (ch *Chord) KeyRange() (uint64, uint64) {
-
+	ch.mu.Lock()
+	defer ch.mu.Unlock()
+	return uint64(ch.predecessor.Hash), uint64(ch.ftable[0].Hash)
 }
 
 // Make Chord object and join the Chord ring
-func Make(isIterative bool) *Chord {
-
+func Make(existingNode *util.Node, isIterative bool) *Chord {
+	return nil
 }

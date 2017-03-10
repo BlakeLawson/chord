@@ -7,3 +7,4 @@ import (
 )
 
 // TODO: kvclient tests here
+// TODO: make chord mock to test without depending on chord implementation

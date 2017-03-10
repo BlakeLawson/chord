@@ -3,24 +3,25 @@ package kvclient
 
 import (
 	"chord"
-	"kvserver"
 )
 
-// Right now, this implementation assumes that all chord and server instances
-// are running on the same machine for simplicity. At some point, will need to
-// rewrite so it goes over the network.
-
+// KVClient represents client for distributed kv store.
 type KVClient struct {
+	ch *chord.Chord
 }
 
+// Get returns value associated with given key. Return nil on success.
 func (kvc *KVClient) Get(key string) (string, error) {
-
+	return "", nil
 }
 
+// Put inserts key value pair into distributed kv store. Returns nil on
+// success.
 func (kvc *KVClient) Put(key string, val string) error {
-
+	return nil
 }
 
-func Make() *KVClient {
-
+// Make a new KVClient instance.
+func Make(ch *chord.Chord) *KVClient {
+	return &KVClient{ch}
 }
