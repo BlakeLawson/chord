@@ -13,18 +13,25 @@ type KVClient struct {
 
 // Get returns value associated with given key. Return nil on success.
 func (kvc *KVClient) Get(key string) (string, error) {
-	node, err := ch.Lookup(key)
+	node, err := kvc.ch.Lookup(key)
+	if err != nil {
+		return "", err
+	}
 	//TODO get value from node.
-
-	return "", err
+	result, err := node.RemoteGet(key)
+	return result, err
 }
 
 // Put inserts key value pair into distributed kv store. Returns nil on
 // success.
 func (kvc *KVClient) Put(key string, val string) error {
-	node, err := ch.Lookup(key)
+	node, err := kvc.ch.Lookup(key)
+	if err != nil {
+		return err
+	}
 	//TODO put value from node.
-	return nil
+	err = node.RemotePut(key, val)
+	return err
 }
 
 // Make a new KVClient instance.
