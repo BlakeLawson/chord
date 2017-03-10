@@ -1,5 +1,15 @@
 // Blake Lawson (blawson@princeton.edu) and Oluwatosin Adewale (oadewale@princeton.edu)
+
 package util
 
-// Not sure exactly how this will work, but I envision that this will abstract
-// most of the network functions.
+func RemoteGet(key string) (string, error) {
+	return "", nil
+}
+
+func RemotePut(key string, val string) error {
+	return nil
+}
+
+func RemoteLookup(key string) (*Node, error) {
+	return nil, nil
+}
