@@ -27,3 +27,15 @@ func MakeNode(addr net.IP, port int) *Node {
 func (n *Node) String() string {
 	return fmt.Sprintf("%s:%d", n.Addr.String(), n.Port)
 }
+
+func (n *Node) RemoteGet(key string) (string, error) {
+	return "", nil
+}
+
+func (n *Node) RemotePut(key string, val string) error {
+	return nil
+}
+
+func (n *Node) RemoteLookup(key string) (*Node, error) {
+	return nil, nil
+}
