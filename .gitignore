@@ -6,3 +6,9 @@
 
 # Test binary, build with 'go test -c'
 *.test
+
+# Possibly atom files
+github.com
+golang.org
+bin
+pkg
