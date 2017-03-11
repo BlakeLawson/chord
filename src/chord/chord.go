@@ -2,7 +2,6 @@
 package chord
 
 import (
-	"net"
 	"sync"
 	"util"
 )
@@ -22,15 +21,16 @@ type Chord struct {
 	slist []*util.Node
 }
 
-func (ch *Chord) recursiveLookup(key string) (net.IP, error) {
+func (ch *Chord) recursiveLookup(key string) (*util.Node, error) {
 	return nil, nil
 }
 
-func (ch *Chord) iterativeLookup(key string) (net.IP, error) {
+func (ch *Chord) iterativeLookup(key string) (*util.Node, error) {
 	return nil, nil
 }
 
-func (ch *Chord) Lookup(key string) (net.IP, error) {
+//Lookup
+func (ch *Chord) Lookup(key string) (*util.Node, error) {
 	if ch.isIterative {
 		return ch.iterativeLookup(key)
 	}

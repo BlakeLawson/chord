@@ -1,4 +1,5 @@
 // Blake Lawson (blawson@princeton.edu) and Oluwatosin Adewale (oadewale@princeton.edu)
+
 package kvserver
 
 import (
@@ -16,13 +17,19 @@ type KVServer struct {
 // Get returns value associated with given key. Returns empty string if key
 // not present.
 func (kvs *KVServer) Get(key string) string {
-	return ""
+	kvs.mu.Lock()
+	defer kvs.mu.Unlock()
+
+	return kvs.state[key]
 }
 
 // Put inserts key-value pair into server state. Creates new entry if not
 // present. Otherwise overwrites existing value.
 func (kvs *KVServer) Put(key string, val string) {
+	kvs.mu.Lock()
+	defer kvs.mu.Unlock()
 
+	kvs.state[key] = val
 }
 
 // Make a new KVServer instance.
