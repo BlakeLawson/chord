@@ -33,7 +33,7 @@ func TestNode(t *testing.T) {
 
 	// Check hash
 	m := MakeNode(addr, goodPort)
-	if m.hash != n.hash {
+	if m.Hash != n.Hash {
 		t.Fatalf("Nodes hashed to different values")
 	}
 }
