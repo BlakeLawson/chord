@@ -4,6 +4,7 @@ package kvclient
 
 import (
 	"chord"
+	"rpcserver"
 )
 
 // KVClient represents client for distributed kv store.
@@ -17,8 +18,8 @@ func (kvc *KVClient) Get(key string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	//TODO get value from node.
-	result, err := node.RemoteGet(key)
+
+	result, err := rpcserver.RemoteGet(node, key)
 	return result, err
 }
 
@@ -29,8 +30,8 @@ func (kvc *KVClient) Put(key string, val string) error {
 	if err != nil {
 		return err
 	}
-	//TODO put value from node.
-	err = node.RemotePut(key, val)
+
+	err = rpcserver.RemotePut(node, key, val)
 	return err
 }
 
