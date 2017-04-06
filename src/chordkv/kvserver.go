@@ -1,16 +1,15 @@
 // Blake Lawson (blawson@princeton.edu) and Oluwatosin Adewale (oadewale@princeton.edu)
 
-package kvserver
+package chordkv
 
 import (
-	"chord"
 	"sync"
 )
 
 // KVServer represents node in distributed key value storage system.
 type KVServer struct {
 	mu    sync.Mutex
-	ch    *chord.Chord
+	ch    *Chord
 	state map[string]string
 }
 
@@ -33,7 +32,7 @@ func (kvs *KVServer) Put(key string, val string) {
 }
 
 // Make a new KVServer instance.
-func Make(ch *chord.Chord) *KVServer {
+func MakeKVServer(ch *Chord) *KVServer {
 	return &KVServer{
 		mu:    sync.Mutex{},
 		ch:    ch,

@@ -1,14 +1,13 @@
 // Blake Lawson (blawson@princeton.edu) and Oluwatosin Adewale (oadewale@princeton.edu)
 
-package rpcserver
+package chordkv
 
 import (
 	"net/rpc"
-	"util"
 )
 
 // RemoteGet performs Get RPC on remote node.
-func RemoteGet(n *util.Node, key string) (string, error) {
+func RemoteGet(n *Node, key string) (string, error) {
 	client, err := rpc.DialHTTP("tcp", n.String())
 	if err != nil {
 		return "", err
@@ -24,7 +23,7 @@ func RemoteGet(n *util.Node, key string) (string, error) {
 }
 
 // RemotePut performs Put RPC on remote node.
-func RemotePut(n *util.Node, key string, val string) error {
+func RemotePut(n *Node, key string, val string) error {
 	client, err := rpc.DialHTTP("tcp", n.String())
 	if err != nil {
 		return err
@@ -37,7 +36,7 @@ func RemotePut(n *util.Node, key string, val string) error {
 }
 
 // RemoteLookup performs Lookup RPC on remote node.
-func RemoteLookup(n *util.Node, key string) (*util.Node, error) {
+func RemoteLookup(n *Node, key string) (*Node, error) {
 	client, err := rpc.DialHTTP("tcp", n.String())
 	if err != nil {
 		return nil, err
@@ -50,5 +49,5 @@ func RemoteLookup(n *util.Node, key string) (*util.Node, error) {
 		return nil, err
 	}
 
-	return util.MakeNode(reply.Addr, reply.Port), nil
+	return MakeNode(reply.Addr, reply.Port), nil
 }

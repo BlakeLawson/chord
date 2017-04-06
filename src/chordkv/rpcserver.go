@@ -1,11 +1,9 @@
 // Blake Lawson (blawson@princeton.edu) and Oluwatosin Adewale (oadewale@princeton.edu)
 
-package rpcserver
+package chordkv
 
 import (
-	"chord"
 	"fmt"
-	"kvserver"
 	"net"
 	"net/http"
 	"net/rpc"
@@ -14,8 +12,8 @@ import (
 
 // RPCServer used to handle client RPC requests.
 type RPCServer struct {
-	ch *chord.Chord
-	kv *kvserver.KVServer
+	ch *Chord
+	kv *KVServer
 }
 
 // KVGetArgs holds arguments to KVGet RPC.
@@ -82,13 +80,13 @@ var serverInitialized bool
 
 // Start RPCServer listening on given port. Does not return until error or
 // program ends. It is an error to call Start more than once.
-func Start(ch *chord.Chord, kv *kvserver.KVServer, port int) error {
+func Start(ch *Chord, kv *KVServer, port int) error {
 	return start(ch, kv, fmt.Sprintf(":%d", port))
 }
 
 // Local start method with more control over address server listens on. Used
 // for testing.
-func start(ch *chord.Chord, kv *kvserver.KVServer, addr string) error {
+func start(ch *Chord, kv *KVServer, addr string) error {
 	// Ensure only initialized once
 	serverMutex.Lock()
 	if serverRunning {

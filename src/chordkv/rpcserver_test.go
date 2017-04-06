@@ -1,15 +1,12 @@
 // Blake Lawson (blawson@princeton.edu) and Oluwatosin Adewale (oadewale@princeton.edu)
 
-package rpcserver
+package chordkv
 
 import (
-	"chord"
 	"fmt"
-	"kvserver"
 	"net"
 	"testing"
 	"time"
-	"util"
 )
 
 func TestInitialization(t *testing.T) {
@@ -22,8 +19,11 @@ func TestInitialization(t *testing.T) {
 
 	// Create a server
 	port := 8888
-	ch := chord.Make(nil, true)
-	kv := kvserver.Make(ch)
+	ch, err := Make(MakeNode(net.ParseIP("127.0.0.1"), port), nil, true)
+  if err != nil {
+    t.Fatalf("Chord initializtion failed")
+  }
+	kv := MakeKVServer(ch)
 
 	serverDone := make(chan bool)
 	go func() {
@@ -73,8 +73,11 @@ func TestBasicRequest(t *testing.T) {
 
 	addr := "127.0.0.1"
 	port := 8888
-	ch := chord.Make(nil, true)
-	kv := kvserver.Make(ch)
+	ch, err := Make(MakeNode(net.ParseIP(addr), port), nil, true)
+  if err != nil {
+    t.Fatalf("Chord initialization failed")
+  }
+	kv := MakeKVServer(ch)
 
 	go func() {
 		if err := start(ch, kv, fmt.Sprintf("%s:%d", addr, port)); err != nil {
@@ -86,7 +89,7 @@ func TestBasicRequest(t *testing.T) {
 	time.Sleep(time.Second)
 
 	// Try connecting to the server.
-	n := util.MakeNode(net.ParseIP(addr), port)
+	n := MakeNode(net.ParseIP(addr), port)
 	if _, err := RemoteGet(n, ""); err != nil {
 		t.Fatalf("RPC failed")
 	}

@@ -1,10 +1,15 @@
 // Blake Lawson (blawson@princeton.edu) and Oluwatosin Adewale (oadewale@princeton.edu)
 
-package chord
+package chordkv
 
 import (
 	"sync"
-	"util"
+)
+
+const (
+	// TODO: revisit this number
+	sListSize int = 10
+	fTableSize int = 64
 )
 
 // Chord represents single Chord instance.
@@ -13,25 +18,25 @@ type Chord struct {
 	isIterative bool
 
 	// predecessor
-	predecessor *util.Node
+	predecessor *Node
 
 	// finger table
-	ftable []*util.Node
+	ftable []*Node
 
 	// successor list
-	slist []*util.Node
+	slist []*Node
 }
 
-func (ch *Chord) recursiveLookup(key string) (*util.Node, error) {
+func (ch *Chord) recursiveLookup(key string) (*Node, error) {
 	return nil, nil
 }
 
-func (ch *Chord) iterativeLookup(key string) (*util.Node, error) {
+func (ch *Chord) iterativeLookup(key string) (*Node, error) {
 	return nil, nil
 }
 
-//Lookup
-func (ch *Chord) Lookup(key string) (*util.Node, error) {
+// Lookup node responsible for key. Returns the node and its predecessor.
+func (ch *Chord) Lookup(key string) (*Node, error) {
 	if ch.isIterative {
 		return ch.iterativeLookup(key)
 	}
@@ -47,7 +52,13 @@ func (ch *Chord) KeyRange() (uint64, uint64) {
 	return uint64(ch.predecessor.Hash), uint64(ch.ftable[0].Hash)
 }
 
-// Make Chord object and join the Chord ring
-func Make(existingNode *util.Node, isIterative bool) *Chord {
-	return nil
+// Make Chord object and join the Chord ring. If existingNode is null, then
+// this Chord node is first.
+func Make(self *Node, existingNode *Node, isIterative bool) (*Chord, error) {
+	ch := &Chord{}
+	ch.isIterative = isIterative
+	ch.ftable = make([]*Node, fTableSize)
+	ch.slist = make([]*Node, sListSize)
+
+	return ch, nil
 }

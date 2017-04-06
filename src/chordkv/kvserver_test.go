@@ -1,9 +1,8 @@
 // Blake Lawson (blawson@princeton.edu) and Oluwatosin Adewale (oadewale@princeton.edu)
 
-package kvserver
+package chordkv
 
 import (
-	"chord"
 	"fmt"
 	"testing"
 )
@@ -11,8 +10,11 @@ import (
 func TestBasic(t *testing.T) {
 	fmt.Println("Test: Basic KVServer ops ...")
 
-	ch := chord.Make(nil, true)
-	kvs := Make(ch)
+	ch, err := Make(nil, nil, true)
+  if err != nil {
+    t.Fatalf("Chord initialziation failed")
+  }
+	kvs := MakeKVServer(ch)
 
 	// Test basic put/get.
 	k := "abc"

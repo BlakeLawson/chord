@@ -1,15 +1,10 @@
 // Blake Lawson (blawson@princeton.edu) and Oluwatosin Adewale (oadewale@princeton.edu)
 
-package kvclient
-
-import (
-	"chord"
-	"rpcserver"
-)
+package chordkv
 
 // KVClient represents client for distributed kv store.
 type KVClient struct {
-	ch *chord.Chord
+	ch *Chord
 }
 
 // Get returns value associated with given key. Return nil on success.
@@ -19,7 +14,7 @@ func (kvc *KVClient) Get(key string) (string, error) {
 		return "", err
 	}
 
-	result, err := rpcserver.RemoteGet(node, key)
+	result, err := RemoteGet(node, key)
 	return result, err
 }
 
@@ -31,11 +26,11 @@ func (kvc *KVClient) Put(key string, val string) error {
 		return err
 	}
 
-	err = rpcserver.RemotePut(node, key, val)
+	err = RemotePut(node, key, val)
 	return err
 }
 
 // Make a new KVClient instance.
-func Make(ch *chord.Chord) *KVClient {
+func MakeKVClient(ch *Chord) *KVClient {
 	return &KVClient{ch}
 }
