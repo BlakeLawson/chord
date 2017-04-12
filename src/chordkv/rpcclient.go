@@ -36,18 +36,39 @@ func RemotePut(n *Node, key string, val string) error {
 }
 
 // RemoteLookup performs Lookup RPC on remote node.
-func RemoteLookup(n *Node, key string) (*Node, error) {
+func RemoteLookup(n *Node, h UHash) (*Chord, error) {
 	client, err := rpc.DialHTTP("tcp", n.String())
 	if err != nil {
 		return nil, err
 	}
 
-	args := &ChordLookupArgs{key}
+	args := &ChordLookupArgs{h}
 	var reply ChordLookupReply
 	err = client.Call("RPCServer.ChordLookup", args, &reply)
 	if err != nil {
 		return nil, err
 	}
 
-	return MakeNode(reply.Addr, reply.Port), nil
+	ch := &Chord{}
+	ch.n = reply.N
+	ch.predecessor = reply.Predecessor
+	ch.ftable = reply.FTable
+	ch.slist = reply.SList
+	return ch, nil
+}
+
+// RemoteGetPred returns the predecessor of the specified node.
+func RemoteGetPred(n *Node) (*Node, error) {
+	client, err := rpc.DialHTTP("tcp", n.String())
+	if err != nil {
+		return nil, err
+	}
+
+	args := new(GetPredArgs)
+	var reply GetPredReply
+	err = client.Call("RPCServer.GetPred", args, &reply)
+	if err != nil {
+		return nil, err
+	}
+	return &reply.N, nil
 }

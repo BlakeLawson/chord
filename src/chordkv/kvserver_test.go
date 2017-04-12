@@ -10,10 +10,11 @@ import (
 func TestBasic(t *testing.T) {
 	fmt.Println("Test: Basic KVServer ops ...")
 
-	ch, err := Make(nil, nil, true)
-  if err != nil {
-    t.Fatalf("Chord initialziation failed")
-  }
+	ch, err := MakeChord(nil, nil, true)
+	if err != nil {
+		t.Fatalf("Chord initialziation failed")
+	}
+	defer ch.Kill()
 	kvs := MakeKVServer(ch)
 
 	// Test basic put/get.

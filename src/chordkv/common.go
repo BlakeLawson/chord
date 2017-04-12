@@ -11,7 +11,7 @@ const debug = false
 
 // Print functions
 
-// Pretty logs
+// Color used for pretty logs
 type Color string
 
 const (
@@ -24,14 +24,14 @@ const (
 	White  Color = "\033[1;37m"
 )
 
-// Cprintf prints with colors. Only works in debugging mode.
-func Cprintf(c Color, format string, a ...interface{}) {
+// CPrintf prints with colors. Only works in debugging mode.
+func CPrintf(c Color, format string, a ...interface{}) {
 	if debug {
 		log.Printf("%s%s%s", c, fmt.Sprintf(format, a), None)
 	}
 }
 
-// Dprintf is debugging print statement
-func Dprintf(format string, a ...interface{}) {
-	Cprintf(None, format, a)
+// DPrintf is debugging print statement
+func DPrintf(format string, a ...interface{}) {
+	CPrintf(None, format, a)
 }

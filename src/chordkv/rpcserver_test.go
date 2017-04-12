@@ -19,10 +19,11 @@ func TestInitialization(t *testing.T) {
 
 	// Create a server
 	port := 8888
-	ch, err := Make(MakeNode(net.ParseIP("127.0.0.1"), port), nil, true)
-  if err != nil {
-    t.Fatalf("Chord initializtion failed")
-  }
+	ch, err := MakeChord(MakeNode(net.ParseIP("127.0.0.1"), port), nil, true)
+	if err != nil {
+		t.Fatalf("Chord initializtion failed")
+	}
+	defer ch.Kill()
 	kv := MakeKVServer(ch)
 
 	serverDone := make(chan bool)
@@ -73,10 +74,11 @@ func TestBasicRequest(t *testing.T) {
 
 	addr := "127.0.0.1"
 	port := 8888
-	ch, err := Make(MakeNode(net.ParseIP(addr), port), nil, true)
-  if err != nil {
-    t.Fatalf("Chord initialization failed")
-  }
+	ch, err := MakeChord(MakeNode(net.ParseIP(addr), port), nil, true)
+	if err != nil {
+		t.Fatalf("Chord initialization failed")
+	}
+	defer ch.Kill()
 	kv := MakeKVServer(ch)
 
 	go func() {

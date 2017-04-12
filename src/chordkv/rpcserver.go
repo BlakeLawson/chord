@@ -50,25 +50,43 @@ func (rpcs *RPCServer) KVPut(args *KVPutArgs, reply *KVPutReply) error {
 
 // ChordLookupArgs holds arguments to ChordLookup RPC.
 type ChordLookupArgs struct {
-	Key string
+	H UHash
 }
 
 // ChordLookupReply holds reply to ChordLookup RPC.
 type ChordLookupReply struct {
-	Addr net.IP
-	Port int
+	N           *Node
+	Predecessor *Node
+	FTable      []*Node
+	SList       []*Node
 }
 
 // ChordLookup returns result of lookup performed by the Chord instance running
 // on this RPCServer.
 func (rpcs *RPCServer) ChordLookup(args *ChordLookupArgs, reply *ChordLookupReply) error {
-	n, err := rpcs.ch.Lookup(args.Key)
+	rCh, err := rpcs.ch.Lookup(args.H)
 	if err != nil {
 		return err
 	}
 
-	reply.Addr = n.Addr
-	reply.Port = n.Port
+	reply.N = rCh.n
+	reply.Predecessor = rCh.predecessor
+	reply.FTable = rCh.ftable
+	reply.SList = rCh.slist
+	return nil
+}
+
+// GetPredArgs holds arguments for GetPred.
+type GetPredArgs interface{}
+
+// GetPredReply holds reply to GetPred.
+type GetPredReply struct {
+	N Node
+}
+
+// GetPred returns the predecessor of the Chord instance on this server.
+func (rpcs *RPCServer) GetPred(args *GetPredArgs, reply *GetPredReply) error {
+	reply.N = *rpcs.ch.predecessor
 	return nil
 }
 

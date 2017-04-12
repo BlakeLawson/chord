@@ -31,7 +31,7 @@ func (kvs *KVServer) Put(key string, val string) {
 	kvs.state[key] = val
 }
 
-// Make a new KVServer instance.
+// MakeKVServer creates new KVServer instance.
 func MakeKVServer(ch *Chord) *KVServer {
 	return &KVServer{
 		mu:    sync.Mutex{},
