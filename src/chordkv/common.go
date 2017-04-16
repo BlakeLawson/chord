@@ -37,7 +37,7 @@ func DPrintf(format string, a ...interface{}) {
 	CPrintf(None, format, a)
 }
 
-//InRange checks if a key is within min (exclusive) and max (inclusive) on the chord ring.
+// inRange checks if a key is within min (exclusive) and max (inclusive) on the chord ring.
 func inRange(key UHash, min UHash, max UHash) bool {
 	// if this node respons
 	if min < max && key > min && key <= max {
@@ -52,4 +52,14 @@ func inRange(key UHash, min UHash, max UHash) bool {
 		}
 	}
 	return false
+}
+
+// id is monotonically increasing
+var id int
+
+// getID returns next ID in monotonically increasing sequence.
+func getID() int {
+	temp := id
+	id++
+	return temp
 }
