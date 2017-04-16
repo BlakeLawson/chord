@@ -49,7 +49,39 @@ func (ch *Chord) recursiveLookup(h UHash) (*Chord, error) {
 }
 
 func (ch *Chord) iterativeLookup(h UHash) (*Chord, error) {
-	return nil, nil
+	min, max := ch.KeyRange()
+	if InRange(h, UHash(min), UHash(max)) {
+		return ch, nil
+	}
+
+	closest := ch.FindClosestNode(h)
+
+	for closest.Hash != h {
+		temp, err := RemoteFindClosestNode(h)
+		if err != nil {
+			continue
+		}
+		closest = temp
+	}
+
+	return &Chord{sync.Mutex{}, ch.isIterative, closest, nil, nil, nil, nil}, nil
+}
+
+// FindClosestNode is a helper function for iterative lookups. It returns the
+// the closest node to the identifier h given this node's fingertable.
+func (ch *Chord) FindClosestNode(h UHash) *Node {
+	// could locking be problematic?
+	prevKey := ch.n.Hash
+
+	// for all nodes, check if key h falls in range,
+	for _, node := range ch.ftable {
+		if InRange(h, prevKey, node.Hash) {
+			return node
+		}
+		prevKey = node.Hash
+	}
+	// if not found in finger table, return last node in ftable.
+	return ch.ftable[fTableSize-1]
 }
 
 // Lookup node responsible for key. Returns the node and its predecessor.
