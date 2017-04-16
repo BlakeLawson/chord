@@ -72,3 +72,8 @@ func RemoteGetPred(n *Node) (*Node, error) {
 	}
 	return &reply.N, nil
 }
+
+// RemoteFindClosestNode find the closest node to hash identifier h
+func RemoteFindClosestNode(h UHash) (*Node, error) {
+	return nil, nil
+}

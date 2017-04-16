@@ -50,7 +50,7 @@ func (ch *Chord) recursiveLookup(h UHash) (*Chord, error) {
 
 func (ch *Chord) iterativeLookup(h UHash) (*Chord, error) {
 	min, max := ch.KeyRange()
-	if InRange(h, UHash(min), UHash(max)) {
+	if inRange(h, UHash(min), UHash(max)) {
 		return ch, nil
 	}
 
@@ -75,7 +75,7 @@ func (ch *Chord) FindClosestNode(h UHash) *Node {
 
 	// for all nodes, check if key h falls in range,
 	for _, node := range ch.ftable {
-		if InRange(h, prevKey, node.Hash) {
+		if inRange(h, prevKey, node.Hash) {
 			return node
 		}
 		prevKey = node.Hash

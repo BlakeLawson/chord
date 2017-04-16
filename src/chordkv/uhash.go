@@ -7,7 +7,7 @@ import (
 	"encoding/binary"
 )
 
-// Uniform hash type.
+// UHash is a Uniform hash type.
 type UHash uint64
 
 // Hash the given string.
