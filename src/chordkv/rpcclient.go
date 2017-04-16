@@ -73,7 +73,18 @@ func RemoteGetPred(n *Node) (*Node, error) {
 	return &reply.N, nil
 }
 
-// RemoteFindClosestNode find the closest node to hash identifier h
-func RemoteFindClosestNode(h UHash) (*Node, error) {
+// RemoteFindClosestNode find the closest node from n to hash identifier h
+func RemoteFindClosestNode(h UHash, n *Node) (*Node, error) {
 	return nil, nil
+}
+
+// RemoteForwardLookup forwards source's lookup on h to dest
+func RemoteForwardLookup(h UHash, source *Node, rID int, dest *Node) error {
+	return nil
+}
+
+// RemoteSendLookupResult sends the lookup result from the result node
+// to the source of the lookup with the request ID rID
+func RemoteSendLookupResult(source *Node, rID int, result *Node) error {
+	return nil
 }
