@@ -3,6 +3,7 @@
 package chordkv
 
 import (
+	"errors"
 	"log"
 	"math"
 	"math/rand"
@@ -36,6 +37,9 @@ type Chord struct {
 
 	// Used to terminate instance's background threads.
 	killChan chan bool
+
+	// Used to receive result of recursive lookup
+	lookupResultChan map[int]chan *Node
 }
 
 // Given index in fTable, return starting hash value
@@ -44,10 +48,45 @@ func (ch *Chord) fTableStart(i int) UHash {
 	return UHash(math.Mod(tmp, math.MaxUint64))
 }
 
+// recursiveLookup recursively looks up the node responsible for identifier h
 func (ch *Chord) recursiveLookup(h UHash) (*Chord, error) {
-	return nil, nil
+	// generate request ID, add channel to map and then forward lookup
+	rID := getID()
+	ch.lookupResultChan[rID] = make(chan *Node)
+	ch.ForwardLookup(h, ch.n, rID)
+	// wait for result and then delete channel
+	n := <-ch.lookupResultChan[rID]
+	delete(ch.lookupResultChan, rID)
+	return &Chord{sync.Mutex{}, ch.isIterative, n, nil, nil, nil, nil, nil}, nil
 }
 
+// ForwardLookup forwards the lookup to an appropriate node closer to h. If this
+// chord instance is responsible for h, it lets the source of the lookup know
+// if this is t
+func (ch *Chord) ForwardLookup(h UHash, source *Node, rID int) error {
+	// base case. if this node is responsible for h, let the source of the lookup know
+	min, max := ch.KeyRange()
+	if inRange(h, UHash(min), UHash(max)) {
+		RemoteSendLookupResult(source, rID, ch.n)
+	}
+	// else
+	// looks up the node closest to h on ch's fingertable and forwards lookup to it
+	dest := ch.FindClosestNode(h)
+	err := RemoteForwardLookup(h, source, rID, dest)
+	return err
+}
+
+// ReceiveLookUpResult receives lookup result and passes it to the lookupResultChan
+func (ch *Chord) receiveLookUpResult(n *Node, rID int) error {
+	lookupChan, ok := ch.lookupResultChan[rID]
+	if !ok {
+		return errors.New("This request does not exist")
+	}
+	lookupChan <- n
+	return nil
+}
+
+// iterativeLookup iteratively looks up the node responsible for identifier h
 func (ch *Chord) iterativeLookup(h UHash) (*Chord, error) {
 	min, max := ch.KeyRange()
 	if inRange(h, UHash(min), UHash(max)) {
@@ -57,17 +96,17 @@ func (ch *Chord) iterativeLookup(h UHash) (*Chord, error) {
 	closest := ch.FindClosestNode(h)
 
 	for closest.Hash != h {
-		temp, err := RemoteFindClosestNode(h)
+		temp, err := RemoteFindClosestNode(h, closest)
 		if err != nil {
 			continue
 		}
 		closest = temp
 	}
 
-	return &Chord{sync.Mutex{}, ch.isIterative, closest, nil, nil, nil, nil}, nil
+	return &Chord{sync.Mutex{}, ch.isIterative, closest, nil, nil, nil, nil, nil}, nil
 }
 
-// FindClosestNode is a helper function for iterative lookups. It returns the
+// FindClosestNode is a helper function for lookups. It returns the
 // the closest node to the identifier h given this node's fingertable.
 func (ch *Chord) FindClosestNode(h UHash) *Node {
 	// could locking be problematic?
