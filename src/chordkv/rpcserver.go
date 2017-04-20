@@ -116,6 +116,46 @@ func (rpcs *RPCServer) FindClosestNode(args *FindClosestArgs, reply *FindClosest
 	return nil
 }
 
+// ChordFields holds values for building a chord instance.
+// It is used to make passing around chord isntance information easier
+type ChordFields struct {
+	N           *Node
+	Predecessor *Node
+	FTable      []*Node
+	SList       []*Node
+}
+
+func (chFields ChordFields) getChordInstance() *Chord {
+	ch := &Chord{
+		n:           chFields.N,
+		predecessor: chFields.Predecessor,
+		ftable:      chFields.FTable,
+		slist:       chFields.SList,
+	}
+	return ch
+}
+
+// ForwardLookupArgs holds arguments for FindClosestNode.
+type ForwardLookupArgs struct {
+	h            UHash
+	sourceFields ChordFields
+	rID          int
+}
+
+// ForwardLookupReply holds reply to is an empty interface.
+type ForwardLookupReply interface {
+}
+
+// ForwardLookup finds the closest node to a hash from the Chord instance on this server.
+func (rpcs *RPCServer) ForwardLookup(args *ForwardLookupArgs, reply *ForwardLookupReply) error {
+	source := args.sourceFields.getChordInstance()
+	err := rpcs.ch.ForwardLookup(args.h, source, args.rID)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
 // Package level variables to ensure only single server.
 var serverMutex sync.Mutex
 var serverListener net.Listener

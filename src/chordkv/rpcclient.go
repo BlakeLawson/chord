@@ -82,7 +82,7 @@ func RemoteFindClosestNode(h UHash, ch *Chord) (*Chord, error) {
 
 	args := &FindClosestArgs{h}
 	var reply FindClosestReply
-	err = client.Call("RPCServer.GetPred", args, &reply)
+	err = client.Call("RPCServer.FindClosestNode", args, &reply)
 	if err != nil {
 		return nil, err
 	}
@@ -97,6 +97,25 @@ func RemoteFindClosestNode(h UHash, ch *Chord) (*Chord, error) {
 
 // RemoteForwardLookup forwards source's lookup on h to dest
 func RemoteForwardLookup(h UHash, source *Chord, rID int, dest *Chord) error {
+	client, err := rpc.DialHTTP("tcp", dest.n.String())
+	if err != nil {
+		return err
+	}
+
+	args := &ForwardLookupArgs{
+		h: h,
+		sourceFields: ChordFields{
+			N:           source.n,
+			Predecessor: source.predecessor,
+			FTable:      source.ftable,
+			SList:       source.slist},
+		rID: rID}
+
+	var reply FindClosestReply
+	err = client.Call("RPCServer.ForwardLookup", args, &reply)
+	if err != nil {
+		return err
+	}
 	return nil
 }
 
