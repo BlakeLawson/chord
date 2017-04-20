@@ -215,6 +215,23 @@ func (ch *Chord) KeyRange() (uint64, uint64) {
 	return uint64(ch.predecessor.Hash), uint64(ch.ftable[0].Hash)
 }
 
+// inRange checks if a key is within min (exclusive) and max (inclusive) on the chord ring.
+func inRange(key UHash, min UHash, max UHash) bool {
+	// if this node respons
+	if min < max && key > min && key <= max {
+		return true
+	}
+	if min > max {
+		if key > min && key <= math.MaxInt64 {
+			return true
+		}
+		if key >= 0 && key <= max {
+			return true
+		}
+	}
+	return false
+}
+
 // MakeChord creates object and join the Chord ring. If existingNode is null,
 // then this Chord node is first.
 func MakeChord(self *Node, existingNode *Node, isIterative bool) (*Chord, error) {
