@@ -74,8 +74,25 @@ func RemoteGetPred(n *Node) (*Node, error) {
 }
 
 // RemoteFindClosestNode find the closest node from n to hash identifier h
-func RemoteFindClosestNode(h UHash, n *Chord) (*Chord, error) {
-	return nil, nil
+func RemoteFindClosestNode(h UHash, ch *Chord) (*Chord, error) {
+	client, err := rpc.DialHTTP("tcp", ch.n.String())
+	if err != nil {
+		return nil, err
+	}
+
+	args := &FindClosestArgs{h}
+	var reply FindClosestReply
+	err = client.Call("RPCServer.GetPred", args, &reply)
+	if err != nil {
+		return nil, err
+	}
+
+	resCh := &Chord{}
+	resCh.n = reply.N
+	resCh.predecessor = reply.Predecessor
+	resCh.ftable = reply.FTable
+	resCh.slist = reply.SList
+	return resCh, nil
 }
 
 // RemoteForwardLookup forwards source's lookup on h to dest

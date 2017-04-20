@@ -90,6 +90,32 @@ func (rpcs *RPCServer) GetPred(args *GetPredArgs, reply *GetPredReply) error {
 	return nil
 }
 
+// FindClosestArgs holds arguments for FindClosestNode.
+type FindClosestArgs struct {
+	h UHash
+}
+
+// FindClosestReply holds reply to FindClosestReply.
+type FindClosestReply struct {
+	N           *Node
+	Predecessor *Node
+	FTable      []*Node
+	SList       []*Node
+}
+
+// FindClosestNode finds the closest node to a hash from the Chord instance on this server.
+func (rpcs *RPCServer) FindClosestNode(args *FindClosestArgs, reply *FindClosestReply) error {
+	rCh, err := rpcs.ch.FindClosestNode(args.h)
+	if err != nil {
+		return err
+	}
+	reply.N = rCh.n
+	reply.Predecessor = rCh.predecessor
+	reply.FTable = rCh.ftable
+	reply.SList = rCh.slist
+	return nil
+}
+
 // Package level variables to ensure only single server.
 var serverMutex sync.Mutex
 var serverListener net.Listener
