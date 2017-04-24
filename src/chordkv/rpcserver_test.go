@@ -9,7 +9,7 @@ import (
 	"time"
 )
 
-func TestInitialization(t *testing.T) {
+func TestRPCServerInitialization(t *testing.T) {
 	fmt.Println("Test: RPCServer initialization ...")
 
 	// End server before running should fail.
@@ -69,7 +69,7 @@ func TestInitialization(t *testing.T) {
 	fmt.Println(" ... Passed")
 }
 
-func TestBasicRequest(t *testing.T) {
+func TestRPCServerBasicRequest(t *testing.T) {
 	fmt.Println("Test: RPCServer basic request ...")
 
 	addr := "127.0.0.1"

@@ -7,7 +7,7 @@ import (
 	"testing"
 )
 
-func TestHash(t *testing.T) {
+func TestUHash(t *testing.T) {
 	fmt.Println("Test: basic hashing ...")
 
 	a := Hash("abc")

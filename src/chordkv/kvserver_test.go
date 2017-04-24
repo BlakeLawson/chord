@@ -7,7 +7,7 @@ import (
 	"testing"
 )
 
-func TestBasic(t *testing.T) {
+func TestKVServerBasic(t *testing.T) {
 	fmt.Println("Test: Basic KVServer ops ...")
 
 	ch, err := MakeChord(nil, nil)
