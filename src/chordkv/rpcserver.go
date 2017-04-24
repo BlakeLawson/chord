@@ -55,10 +55,7 @@ type ChordLookupArgs struct {
 
 // ChordLookupReply holds reply to ChordLookup RPC.
 type ChordLookupReply struct {
-	N           *Node
-	Predecessor *Node
-	FTable      []*Node
-	SList       []*Node
+	ChFields ChordFields
 }
 
 // ChordLookup returns result of lookup performed by the Chord instance running
@@ -69,10 +66,7 @@ func (rpcs *RPCServer) ChordLookup(args *ChordLookupArgs, reply *ChordLookupRepl
 		return err
 	}
 
-	reply.N = rCh.n
-	reply.Predecessor = rCh.predecessor
-	reply.FTable = rCh.ftable
-	reply.SList = rCh.slist
+	reply.ChFields = *serializeChord(rCh)
 	return nil
 }
 
@@ -92,27 +86,26 @@ func (rpcs *RPCServer) GetPred(args *GetPredArgs, reply *GetPredReply) error {
 
 // FindClosestArgs holds arguments for FindClosestNode.
 type FindClosestArgs struct {
-	h UHash
+	H UHash
 }
 
 // FindClosestReply holds reply to FindClosestReply.
 type FindClosestReply struct {
-	N           *Node
-	Predecessor *Node
-	FTable      []*Node
-	SList       []*Node
+	N        Node
+	ChFields *ChordFields
 }
 
 // FindClosestNode finds the closest node to a hash from the Chord instance on this server.
 func (rpcs *RPCServer) FindClosestNode(args *FindClosestArgs, reply *FindClosestReply) error {
-	rCh, err := rpcs.ch.FindClosestNode(args.h)
-	if err != nil {
-		return err
+	reply.ChFields = nil
+
+	// TODO: Not happy about doing locking here
+	rpcs.ch.mu.Lock()
+	reply.N = *rpcs.ch.FindClosestNode(args.H)
+	rpcs.ch.mu.Unlock()
+	if rpcs.ch.n.Hash == reply.N.Hash {
+		reply.ChFields = serializeChord(rpcs.ch)
 	}
-	reply.N = rCh.n
-	reply.Predecessor = rCh.predecessor
-	reply.FTable = rCh.ftable
-	reply.SList = rCh.slist
 	return nil
 }
 
@@ -125,31 +118,39 @@ type ChordFields struct {
 	SList       []*Node
 }
 
-func (chFields ChordFields) getChordInstance() *Chord {
-	ch := &Chord{
+func serializeChord(ch *Chord) *ChordFields {
+	return &ChordFields{
+		N:           ch.n,
+		Predecessor: ch.predecessor,
+		FTable:      ch.ftable,
+		SList:       ch.slist}
+}
+
+func deserializeChord(chFields *ChordFields) *Chord {
+	if chFields == nil {
+		return nil
+	}
+	return &Chord{
 		n:           chFields.N,
 		predecessor: chFields.Predecessor,
 		ftable:      chFields.FTable,
-		slist:       chFields.SList,
-	}
-	return ch
+		slist:       chFields.SList}
 }
 
 // ForwardLookupArgs holds arguments for FindClosestNode.
 type ForwardLookupArgs struct {
-	h            UHash
-	sourceFields ChordFields
-	rID          int
+	H        UHash
+	RID      int
+	ChFields ChordFields
 }
 
 // ForwardLookupReply holds reply to is an empty interface.
-type ForwardLookupReply interface {
-}
+type ForwardLookupReply interface{}
 
 // ForwardLookup finds the closest node to a hash from the Chord instance on this server.
 func (rpcs *RPCServer) ForwardLookup(args *ForwardLookupArgs, reply *ForwardLookupReply) error {
-	source := args.sourceFields.getChordInstance()
-	err := rpcs.ch.ForwardLookup(args.h, source, args.rID)
+	source := deserializeChord(&args.ChFields)
+	err := rpcs.ch.ForwardLookup(args.H, source, args.RID)
 	if err != nil {
 		return err
 	}

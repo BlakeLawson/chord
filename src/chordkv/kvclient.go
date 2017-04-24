@@ -14,7 +14,7 @@ func (kvc *KVClient) Get(key string) (string, error) {
 		return "", err
 	}
 
-	result, err := RemoteGet(chNode.n, key)
+	result, err := chNode.n.RemoteGet(key)
 	return result, err
 }
 
@@ -26,7 +26,7 @@ func (kvc *KVClient) Put(key string, val string) error {
 		return err
 	}
 
-	err = RemotePut(chNode.n, key, val)
+	err = chNode.n.RemotePut(key, val)
 	return err
 }
 

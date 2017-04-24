@@ -19,7 +19,7 @@ func TestInitialization(t *testing.T) {
 
 	// Create a server
 	port := 8888
-	ch, err := MakeChord(MakeNode(net.ParseIP("127.0.0.1"), port), nil, true)
+	ch, err := MakeChord(MakeNode(net.ParseIP("127.0.0.1"), port), nil)
 	if err != nil {
 		t.Fatalf("Chord initializtion failed")
 	}
@@ -74,7 +74,7 @@ func TestBasicRequest(t *testing.T) {
 
 	addr := "127.0.0.1"
 	port := 8888
-	ch, err := MakeChord(MakeNode(net.ParseIP(addr), port), nil, true)
+	ch, err := MakeChord(MakeNode(net.ParseIP(addr), port), nil)
 	if err != nil {
 		t.Fatalf("Chord initialization failed")
 	}
@@ -92,7 +92,7 @@ func TestBasicRequest(t *testing.T) {
 
 	// Try connecting to the server.
 	n := MakeNode(net.ParseIP(addr), port)
-	if _, err := RemoteGet(n, ""); err != nil {
+	if _, err := n.RemoteGet(""); err != nil {
 		t.Fatalf("RPC failed")
 	}
 

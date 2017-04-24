@@ -10,7 +10,7 @@ import (
 func TestBasic(t *testing.T) {
 	fmt.Println("Test: Basic KVServer ops ...")
 
-	ch, err := MakeChord(nil, nil, true)
+	ch, err := MakeChord(nil, nil)
 	if err != nil {
 		t.Fatalf("Chord initialziation failed")
 	}

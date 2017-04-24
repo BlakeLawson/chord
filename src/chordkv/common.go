@@ -35,13 +35,3 @@ func CPrintf(c Color, format string, a ...interface{}) {
 func DPrintf(format string, a ...interface{}) {
 	CPrintf(None, format, a)
 }
-
-// id is monotonically increasing
-var id int
-
-// getID returns next ID in monotonically increasing sequence.
-func getID() int {
-	temp := id
-	id++
-	return temp
-}

@@ -7,7 +7,7 @@ import (
 )
 
 // RemoteGet performs Get RPC on remote node.
-func RemoteGet(n *Node, key string) (string, error) {
+func (n *Node) RemoteGet(key string) (string, error) {
 	client, err := rpc.DialHTTP("tcp", n.String())
 	if err != nil {
 		return "", err
@@ -23,7 +23,7 @@ func RemoteGet(n *Node, key string) (string, error) {
 }
 
 // RemotePut performs Put RPC on remote node.
-func RemotePut(n *Node, key string, val string) error {
+func (n *Node) RemotePut(key string, val string) error {
 	client, err := rpc.DialHTTP("tcp", n.String())
 	if err != nil {
 		return err
@@ -36,7 +36,7 @@ func RemotePut(n *Node, key string, val string) error {
 }
 
 // RemoteLookup performs Lookup RPC on remote node.
-func RemoteLookup(n *Node, h UHash) (*Chord, error) {
+func (n *Node) RemoteLookup(h UHash) (*Chord, error) {
 	client, err := rpc.DialHTTP("tcp", n.String())
 	if err != nil {
 		return nil, err
@@ -49,16 +49,11 @@ func RemoteLookup(n *Node, h UHash) (*Chord, error) {
 		return nil, err
 	}
 
-	ch := &Chord{}
-	ch.n = reply.N
-	ch.predecessor = reply.Predecessor
-	ch.ftable = reply.FTable
-	ch.slist = reply.SList
-	return ch, nil
+	return deserializeChord(&reply.ChFields), nil
 }
 
 // RemoteGetPred returns the predecessor of the specified node.
-func RemoteGetPred(n *Node) (*Node, error) {
+func (n *Node) RemoteGetPred() (*Node, error) {
 	client, err := rpc.DialHTTP("tcp", n.String())
 	if err != nil {
 		return nil, err
@@ -73,43 +68,37 @@ func RemoteGetPred(n *Node) (*Node, error) {
 	return &reply.N, nil
 }
 
-// RemoteFindClosestNode find the closest node from n to hash identifier h
-func RemoteFindClosestNode(h UHash, ch *Chord) (*Chord, error) {
-	client, err := rpc.DialHTTP("tcp", ch.n.String())
+// RemoteFindClosestNode find the closest node from n to hash identifier h.
+// Returns the closest known Node and the Chord instance for that node if the
+// Node is the actual Node that is responsible for h. If the returned Node is
+// not responsible for h then the Chord return is nil.
+func (n *Node) RemoteFindClosestNode(h UHash) (*Node, *Chord, error) {
+	client, err := rpc.DialHTTP("tcp", n.String())
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	args := &FindClosestArgs{h}
 	var reply FindClosestReply
 	err = client.Call("RPCServer.FindClosestNode", args, &reply)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
-	resCh := &Chord{}
-	resCh.n = reply.N
-	resCh.predecessor = reply.Predecessor
-	resCh.ftable = reply.FTable
-	resCh.slist = reply.SList
-	return resCh, nil
+	return &reply.N, deserializeChord(reply.ChFields), nil
 }
 
 // RemoteForwardLookup forwards source's lookup on h to dest
-func RemoteForwardLookup(h UHash, source *Chord, rID int, dest *Chord) error {
-	client, err := rpc.DialHTTP("tcp", dest.n.String())
+func (n *Node) RemoteForwardLookup(h UHash, source *Chord, rID int) error {
+	client, err := rpc.DialHTTP("tcp", n.String())
 	if err != nil {
 		return err
 	}
 
 	args := &ForwardLookupArgs{
-		h: h,
-		sourceFields: ChordFields{
-			N:           source.n,
-			Predecessor: source.predecessor,
-			FTable:      source.ftable,
-			SList:       source.slist},
-		rID: rID}
+		H:        h,
+		RID:      rID,
+		ChFields: *serializeChord(source)}
 
 	var reply FindClosestReply
 	err = client.Call("RPCServer.ForwardLookup", args, &reply)
@@ -121,13 +110,13 @@ func RemoteForwardLookup(h UHash, source *Chord, rID int, dest *Chord) error {
 
 // RemoteSendLookupResult sends the lookup result from the result chord node
 // to the source of the lookup with the request ID rID
-func RemoteSendLookupResult(source *Chord, rID int, result *Chord) error {
+func (n *Node) RemoteSendLookupResult(rID int, result *Chord) error {
 	return nil
 }
 
 // RemoteGetChordFromNode returns a chord instance representing the state at node's
 // chord instance. This is to deal with the fact that many methods return a chord type
 // but the fingertable stores node information
-func RemoteGetChordFromNode(n *Node) (*Chord, error) {
+func (n *Node) RemoteGetChordFromNode() (*Chord, error) {
 	return nil, nil
 }
