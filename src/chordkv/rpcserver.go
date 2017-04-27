@@ -5,15 +5,19 @@ package chordkv
 import (
 	"fmt"
 	"net"
-	"net/http"
 	"net/rpc"
 	"sync"
 )
 
 // RPCServer used to handle client RPC requests.
 type RPCServer struct {
-	ch *Chord
-	kv *KVServer
+	mu           sync.Mutex
+	ch           *Chord
+	kv           *KVServer
+	servListener net.Listener
+	baseServ     *rpc.Server
+	running      bool
+	errChan      chan error
 }
 
 // KVGetArgs holds arguments to KVGet RPC.
@@ -157,69 +161,78 @@ func (rpcs *RPCServer) ForwardLookup(args *ForwardLookupArgs, reply *ForwardLook
 	return nil
 }
 
-// Package level variables to ensure only single server.
-var serverMutex sync.Mutex
-var serverListener net.Listener
-var serverRunning bool
-var serverInitialized bool
+// Ping used for testing
+func (rpcs *RPCServer) Ping(args struct{}, reply *struct{}) error {
+	return nil
+}
 
-// Start RPCServer listening on given port. Does not return until error or
-// program ends. It is an error to call Start more than once.
-func Start(ch *Chord, kv *KVServer, port int) error {
-	return start(ch, kv, fmt.Sprintf(":%d", port))
+// Return true if server is up. Return false otherwise.
+func (rpcs *RPCServer) isRunning() bool {
+	rpcs.mu.Lock()
+	defer rpcs.mu.Unlock()
+	return rpcs.running
+}
+
+// StartRPC creates an RPCServer listening on given port.
+func StartRPC(ch *Chord, kv *KVServer, port int) (*RPCServer, error) {
+	return startRPC(ch, kv, fmt.Sprintf(":%d", port))
 }
 
 // Local start method with more control over address server listens on. Used
 // for testing.
-func start(ch *Chord, kv *KVServer, addr string) error {
-	// Ensure only initialized once
-	serverMutex.Lock()
-	if serverRunning {
-		serverMutex.Unlock()
-		return fmt.Errorf("RPCServer: server already running")
-	}
-	serverRunning = true
-	serverMutex.Unlock()
-	defer func() {
-		serverMutex.Lock()
-		serverRunning = false
-		serverMutex.Unlock()
-	}()
+func startRPC(ch *Chord, kv *KVServer, addr string) (*RPCServer, error) {
+	rpcs := &RPCServer{}
+	rpcs.ch = ch
+	rpcs.kv = kv
+	rpcs.errChan = make(chan error, 1)
+	rpcs.baseServ = rpc.NewServer()
 
-	// Set up the RPC handlers.
-	if !serverInitialized {
-		serverInitialized = true
-		rpcs := &RPCServer{ch, kv}
-		rpc.Register(rpcs)
-		rpc.HandleHTTP()
+	if err := rpcs.baseServ.Register(rpcs); err != nil {
+		return nil, fmt.Errorf("rpc registration failed: %s", err)
 	}
 
 	var err error
-	serverListener, err = net.Listen("tcp", addr)
+	rpcs.servListener, err = net.Listen("tcp", addr)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	// Run the server.
-	err = http.Serve(serverListener, nil)
+	// Start thread for server.
+	go func() {
+		rpcs.mu.Lock()
+		rpcs.running = true
+		rpcs.mu.Unlock()
 
-	// Ignore acceptable error message (occurs on End()).
-	baseMsg := "accept tcp %s: use of closed network connection"
-	okMsg1 := fmt.Sprintf(baseMsg, fmt.Sprintf("[::]%s", addr))
-	okMsg2 := fmt.Sprintf(baseMsg, addr)
-	if err != nil && err.Error() != okMsg1 && err.Error() != okMsg2 {
-		return err
+		// Blocks until completion
+		rpcs.baseServ.Accept(rpcs.servListener)
+
+		rpcs.mu.Lock()
+		rpcs.errChan <- nil
+		rpcs.running = false
+		rpcs.mu.Unlock()
+	}()
+
+	return rpcs, nil
+}
+
+// Block until server stops.
+func (rpcs *RPCServer) wait() error {
+	if !rpcs.isRunning() {
+		return nil
 	}
-	return nil
+
+	return <-rpcs.errChan
 }
 
 // End the server if it is running. Returns nil on success.
-func End() error {
-	serverMutex.Lock()
-	defer serverMutex.Unlock()
-	if !serverRunning {
-		return fmt.Errorf("RPCServer: server not running")
+func (rpcs *RPCServer) end() error {
+	if !rpcs.isRunning() {
+		return fmt.Errorf("server not running")
 	}
 
-	return serverListener.Close()
+	if err := rpcs.servListener.Close(); err != nil {
+		return fmt.Errorf("error closing listener: %s", err)
+	}
+
+	return nil
 }

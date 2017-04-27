@@ -3,12 +3,22 @@
 package chordkv
 
 import (
+	"net"
 	"net/rpc"
+	"time"
 )
+
+func (n *Node) openConn() (*rpc.Client, error) {
+	conn, err := net.DialTimeout("tcp", n.String(), 5*time.Second)
+	if err != nil {
+		return nil, err
+	}
+	return rpc.NewClient(conn), nil
+}
 
 // RemoteGet performs Get RPC on remote node.
 func (n *Node) RemoteGet(key string) (string, error) {
-	client, err := rpc.DialHTTP("tcp", n.String())
+	client, err := n.openConn()
 	if err != nil {
 		return "", err
 	}
@@ -24,7 +34,7 @@ func (n *Node) RemoteGet(key string) (string, error) {
 
 // RemotePut performs Put RPC on remote node.
 func (n *Node) RemotePut(key string, val string) error {
-	client, err := rpc.DialHTTP("tcp", n.String())
+	client, err := n.openConn()
 	if err != nil {
 		return err
 	}
@@ -37,7 +47,7 @@ func (n *Node) RemotePut(key string, val string) error {
 
 // RemoteLookup performs Lookup RPC on remote node.
 func (n *Node) RemoteLookup(h UHash) (*Chord, error) {
-	client, err := rpc.DialHTTP("tcp", n.String())
+	client, err := n.openConn()
 	if err != nil {
 		return nil, err
 	}
@@ -54,7 +64,7 @@ func (n *Node) RemoteLookup(h UHash) (*Chord, error) {
 
 // RemoteGetPred returns the predecessor of the specified node.
 func (n *Node) RemoteGetPred() (*Node, error) {
-	client, err := rpc.DialHTTP("tcp", n.String())
+	client, err := n.openConn()
 	if err != nil {
 		return nil, err
 	}
@@ -73,7 +83,7 @@ func (n *Node) RemoteGetPred() (*Node, error) {
 // Node is the actual Node that is responsible for h. If the returned Node is
 // not responsible for h then the Chord return is nil.
 func (n *Node) RemoteFindClosestNode(h UHash) (*Node, *Chord, error) {
-	client, err := rpc.DialHTTP("tcp", n.String())
+	client, err := n.openConn()
 	if err != nil {
 		return nil, nil, err
 	}
@@ -90,7 +100,7 @@ func (n *Node) RemoteFindClosestNode(h UHash) (*Node, *Chord, error) {
 
 // RemoteForwardLookup forwards source's lookup on h to dest
 func (n *Node) RemoteForwardLookup(h UHash, source *Chord, rID int) error {
-	client, err := rpc.DialHTTP("tcp", n.String())
+	client, err := n.openConn()
 	if err != nil {
 		return err
 	}
@@ -119,4 +129,15 @@ func (n *Node) RemoteSendLookupResult(rID int, result *Chord) error {
 // but the fingertable stores node information
 func (n *Node) RemoteGetChordFromNode() (*Chord, error) {
 	return nil, nil
+}
+
+// RemotePing used for testing RPC functionality.
+func (n *Node) RemotePing() error {
+	client, err := n.openConn()
+	if err != nil {
+		return err
+	}
+
+	var reply struct{}
+	return client.Call("RPCServer.Ping", reply, &reply)
 }

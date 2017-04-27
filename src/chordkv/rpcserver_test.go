@@ -12,56 +12,37 @@ import (
 func TestRPCServerInitialization(t *testing.T) {
 	fmt.Println("Test: RPCServer initialization ...")
 
-	// End server before running should fail.
-	if err := End(); err == nil {
-		t.Fatalf("ended server that wasn't running.")
-	}
+	ch := &Chord{}
+	kv := &KVServer{}
+	port := 8888
+	serverDone := make(chan bool)
 
 	// Create a server
-	port := 8888
-	ch, err := MakeChord(MakeNode(net.ParseIP("127.0.0.1"), port), nil)
+	rpcs, err := StartRPC(ch, kv, port)
+	fmt.Println("Just started server")
 	if err != nil {
-		t.Fatalf("Chord initializtion failed")
+		t.Fatalf("Server initilization failed: %s", err)
 	}
-	defer ch.Kill()
-	kv := MakeKVServer(ch)
-
-	serverDone := make(chan bool)
 	go func() {
-		if err := Start(ch, kv, port); err != nil {
-			t.Fatalf("server failed: %s", err)
+		if err := rpcs.wait(); err != nil {
+			t.Fatalf("Server failed: %s", err)
 		}
 		serverDone <- true
 	}()
 
-	// Wait a few seconds to be sure that the server is running.
+	// Wait a second to be sure that the server is running.
 	time.Sleep(time.Second)
 
-	// Try creating a new server while the first one is running
-	testWorked := make(chan bool)
-	go func() {
-		if err := Start(ch, kv, port); err == nil {
-			t.Fatalf("server started a second time.")
-		}
-		testWorked <- true
-	}()
-
-	select {
-	case <-time.After(time.Second):
-		t.Fatalf("server started a second time.")
-	case <-testWorked:
-		// Do nothing because it worked.
-	}
-
 	// Turn off server.
-	if err := End(); err != nil {
-		t.Fatalf("error stopping server: %s", err)
+	fmt.Println("closing server")
+	if err := rpcs.end(); err != nil {
+		t.Fatalf("Error stopping server: %s", err)
 	}
 
 	// Ensure server stopped.
 	select {
 	case <-time.After(time.Second):
-		t.Fatalf("server did not stop")
+		t.Fatalf("Server did not stop")
 	case <-serverDone:
 		// Do nothing because it worked.
 	}
@@ -73,18 +54,21 @@ func TestRPCServerBasicRequest(t *testing.T) {
 	fmt.Println("Test: RPCServer basic request ...")
 
 	addr := "127.0.0.1"
-	port := 8888
-	ch, err := MakeChord(MakeNode(net.ParseIP(addr), port), nil)
+	port := 8889
+	ch := &Chord{}
+	kv := &KVServer{}
+	serverDone := make(chan bool)
+
+	rpcs, err := startRPC(ch, kv, fmt.Sprintf("%s:%d", addr, port))
 	if err != nil {
-		t.Fatalf("Chord initialization failed")
+		t.Fatalf("Server initialization failed: %s", err)
 	}
-	defer ch.Kill()
-	kv := MakeKVServer(ch)
 
 	go func() {
-		if err := start(ch, kv, fmt.Sprintf("%s:%d", addr, port)); err != nil {
-			t.Fatalf("server failed: %s", err)
+		if err := rpcs.wait(); err != nil {
+			t.Fatalf("Server failed: %s", err)
 		}
+		serverDone <- true
 	}()
 
 	// Let server start.
@@ -92,12 +76,83 @@ func TestRPCServerBasicRequest(t *testing.T) {
 
 	// Try connecting to the server.
 	n := MakeNode(net.ParseIP(addr), port)
-	if _, err := n.RemoteGet(""); err != nil {
-		t.Fatalf("RPC failed")
+	if err := n.RemotePing(); err != nil {
+		t.Fatalf("RPC failed: %s", err)
 	}
 
 	// Stop the server.
-	End()
+	if err := rpcs.end(); err != nil {
+		t.Fatalf("Error stopping server: %s", err)
+	}
+
+	select {
+	case <-time.After(time.Second):
+		t.Fatalf("Server did not stop")
+	case <-serverDone:
+		// Do nothing because it worked
+	}
+
+	fmt.Println(" ... Passed")
+}
+
+func TestRPCServerMultiple(t *testing.T) {
+	fmt.Println("Test: Multiple RPCServers ...")
+
+	N := 5
+	addr := net.ParseIP("127.0.0.1")
+	basePort := 8890
+	ch := &Chord{}
+	kv := &KVServer{}
+	nodes := make([]*Node, N)
+	rpcss := make([]*RPCServer, N)
+	serverDones := make([]chan bool, N)
+	var err error
+
+	// Initialize servers.
+	for i := 0; i < N; i++ {
+		nodes[i] = MakeNode(addr, basePort+i)
+		serverDones[i] = make(chan bool)
+		rpcss[i], err = startRPC(ch, kv, nodes[i].String())
+		if err != nil {
+			t.Fatalf("server%d failed to start: %s", i, err)
+		}
+		go func(j int) {
+			if err := rpcss[j].wait(); err != nil {
+				t.Fatalf("server%d failed: %s", j, err)
+			}
+			serverDones[j] <- true
+		}(i)
+	}
+
+	// Ping all servers
+	for i := 0; i < N; i++ {
+		go func(j int) {
+			if err := nodes[j].RemotePing(); err != nil {
+				t.Fatalf("server%d ping failed: %s", j, err)
+			}
+		}(i)
+	}
+
+	// Give things time to complete
+	time.Sleep(time.Second)
+
+	// Turn off the servers
+	for i := 0; i < N; i++ {
+		if err := rpcss[i].end(); err != nil {
+			t.Fatalf("server%d end failed: %s", i, err)
+		}
+	}
+
+	// Check that everything stopped
+	tick := time.After(2 * time.Second)
+	for i := 0; i < N; i++ {
+		select {
+		case <-tick:
+			t.Fatalf("server%d failed to stop", i)
+		case <-serverDones[i]:
+			// Do nothing because it worked.
+		}
+	}
 
 	fmt.Println(" ... Passed")
 }
