@@ -126,6 +126,9 @@ func (ch *Chord) iterativeLookup(h UHash) (*Chord, error) {
 // FindClosestNode is a helper function for lookups. It returns the closest
 // node to the identifier h given this node's fingertable. THIS METHOD ASSUMES
 // THAT IT IS CALLED FROM A LOCKING CONTEXT.
+//
+// TODO: Our implementation does not handle the case where a key hashes to the
+// same value as a node. Probably won't matter though.
 func (ch *Chord) FindClosestNode(h UHash) *Node {
 	// If I am closest, return myself
 	if inRange(h, ch.predecessor.Hash, ch.ftable[0].Hash) {
