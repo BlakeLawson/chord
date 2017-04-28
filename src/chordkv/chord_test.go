@@ -139,6 +139,20 @@ func TestChordInRangeUnit(t *testing.T) {
 		t.Fatalf("inRange failed for %d < %d < %d", max, h, min)
 	}
 
+	// Test wrap around min is before zero, max is after zero, h inbetween
+	h = 2
+	max = 5
+	min = MaxUHash - 100
+	if !inRange(h, min, max) {
+		t.Fatalf("inRange failed for wrap around, where %d < %d < %d", min, h, max)
+	}
+
+	// test wrap around min is before zero, max is after zero, h outside range
+	h = 5000
+	if inRange(h, min, max) {
+		t.Fatalf("inRange failed for wrap around. where h outside range %d < %d < %d", min, h, max)
+	}
+
 	fmt.Println(" ... Passed")
 }
 
@@ -150,7 +164,8 @@ func TestChordFindClosestNodeUnit(t *testing.T) {
 	// Check for something on the node
 	h := ch.n.Hash - 10
 	if n := ch.FindClosestNode(h); n.Hash != ch.n.Hash {
-		t.Fatalf("FindClosestNode failed when node stored on self")
+		t.Fatalf("FindClosestNode failed when node stored on self.\nIncorrectly returns %v instead %v",
+			n.Hash, ch.n.Hash)
 	}
 
 	// Check for something on the successor
@@ -167,7 +182,7 @@ func TestChordFindClosestNodeUnit(t *testing.T) {
 
 	// Check all other finger table entries
 	for i := 1; i < len(ch.ftable); i++ {
-		h = ch.ftable[i].Hash + 1
+		h = ch.ftable[i].Hash
 		n := ch.FindClosestNode(h)
 		if n.Hash != ch.ftable[i].Hash {
 			// Look up finger number that was given instead.
@@ -178,8 +193,8 @@ func TestChordFindClosestNodeUnit(t *testing.T) {
 					break
 				}
 			}
-			t.Fatalf("FindClosestNode failed for finger %d. Looking up %x. "+
-				"Should be ch.ftable[%d]:%x. Got ch.ftable[%c]:%x",
+			t.Fatalf("FindClosestNode failed for finger %d. Looking up %v. "+
+				"Should be ch.ftable[%d]:%v. Got ch.ftable[%d]:%v",
 				i, h, i, ch.ftable[i].Hash, idx, ch.ftable[idx].Hash)
 		}
 	}

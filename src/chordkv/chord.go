@@ -97,7 +97,7 @@ func (ch *Chord) receiveLookUpResult(result *Chord, rID int) error {
 	lookupChan, ok := ch.respChanMap[rID]
 	ch.mu.Unlock()
 	if !ok {
-		return fmt.Errorf("chord [%s]: request %d does not exist", ch, rID)
+		return fmt.Errorf("chord [%+v]: request %d does not exist", ch, rID)
 	}
 	lookupChan <- result
 	return nil
@@ -113,9 +113,10 @@ func (ch *Chord) iterativeLookup(h UHash) (*Chord, error) {
 	}
 
 	for {
-		closest, rCh, err := closest.RemoteFindClosestNode(h)
+		temp, rCh, err := closest.RemoteFindClosestNode(h)
+		closest = temp
 		if err != nil {
-			return nil, fmt.Errorf("chord [%s]: RemoteFindClosestNode on %s failed: ", ch, closest, err)
+			return nil, fmt.Errorf("chord [%+v]: RemoteFindClosestNode on %v failed. Error: %v ", ch, h, err)
 		}
 		if rCh != nil {
 			return rCh, nil
@@ -131,7 +132,8 @@ func (ch *Chord) iterativeLookup(h UHash) (*Chord, error) {
 // same value as a node. Probably won't matter though.
 func (ch *Chord) FindClosestNode(h UHash) *Node {
 	// If I am closest, return myself
-	if inRange(h, ch.predecessor.Hash, ch.ftable[0].Hash) {
+
+	if inRange(h, ch.predecessor.Hash, ch.n.Hash) {
 		return ch.n
 	}
 
@@ -160,7 +162,7 @@ func (ch *Chord) Lookup(h UHash) (*Chord, error) {
 // Notify used to tell ch that n thinks it might be ch's predecessor.
 func (ch *Chord) Notify(n *Node) error {
 	if n == nil {
-		return fmt.Errorf("chord [%s]: Notify called with nil node")
+		return fmt.Errorf("chord [%+v]: Notify called with nil node", ch)
 	}
 	ch.mu.Lock()
 	defer ch.mu.Unlock()
@@ -247,7 +249,7 @@ func inRange(key UHash, min UHash, max UHash) bool {
 		return true
 	}
 	if min > max {
-		if key > min && key <= math.MaxInt64 {
+		if key > min && key <= MaxUHash {
 			return true
 		}
 		if key >= 0 && key <= max {
