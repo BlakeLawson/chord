@@ -173,3 +173,14 @@ func (n *Node) RemotePing() error {
 	var reply struct{}
 	return client.Call("RPCServer.Ping", reply, &reply)
 }
+
+// RemoteNotify calls Notify on n.
+func (n *Node) RemoteNotify(pred *Node) error {
+	client, err := n.openConn()
+	if err != nil {
+		return err
+	}
+
+	var reply struct{}
+	return client.Call("RPCServer.ChordNotify", pred, &reply)
+}

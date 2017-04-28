@@ -173,6 +173,11 @@ func (rpcs *RPCServer) ForwardLookup(args *ForwardLookupArgs, reply *ForwardLook
 	return nil
 }
 
+// ChordNotify calls notify on local chord instance.
+func (rpcs *RPCServer) ChordNotify(args *Node, reply *struct{}) error {
+	return rpcs.ch.Notify(args)
+}
+
 // Ping used for testing
 func (rpcs *RPCServer) Ping(args struct{}, reply *struct{}) error {
 	return nil
@@ -258,7 +263,7 @@ func (rpcs *RPCServer) wait() error {
 // End the server if it is running. Returns nil on success.
 func (rpcs *RPCServer) end() error {
 	if !rpcs.isRunning() {
-		return fmt.Errorf("server not running")
+		return nil
 	}
 
 	if err := rpcs.servListener.Close(); err != nil {
