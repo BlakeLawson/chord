@@ -240,7 +240,7 @@ func TestChordFindClosestNodeUnit(t *testing.T) {
 
 	// Check all other finger table entries
 	for i := 1; i < len(ch.ftable); i++ {
-		h = ch.ftable[i].Hash
+		h = ch.ftable[i].Hash + 1
 		n := ch.FindClosestNode(h)
 		if n.Hash != ch.ftable[i].Hash {
 			// Look up finger number that was given instead.
