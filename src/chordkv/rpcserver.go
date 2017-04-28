@@ -161,6 +161,11 @@ func (rpcs *RPCServer) ForwardLookup(args *ForwardLookupArgs, reply *ForwardLook
 	return nil
 }
 
+// ChordNotify calls notify on local chord instance.
+func (rpcs *RPCServer) ChordNotify(args *Node, reply *struct{}) error {
+	return rpcs.ch.Notify(args)
+}
+
 // Ping used for testing
 func (rpcs *RPCServer) Ping(args struct{}, reply *struct{}) error {
 	return nil

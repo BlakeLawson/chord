@@ -229,7 +229,7 @@ func (ch *Chord) Stabilize() {
 			}
 			ch.mu.Unlock()
 
-			err = ch.Notify(ch.ftable[0])
+			err = ch.ftable[0].RemoteNotify(ch.n)
 			if err != nil {
 				// TODO: This should fail quietly, but going to throw fatal for now.
 				// Change to DPrintf(...) later.
