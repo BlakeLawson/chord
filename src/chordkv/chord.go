@@ -100,7 +100,7 @@ func (ch *Chord) receiveLookUpResult(result *Chord, rID int) error {
 	lookupChan, ok := ch.respChanMap[rID]
 	ch.mu.Unlock()
 	if !ok {
-		return fmt.Errorf("chord [%+v]: request %d does not exist", ch, rID)
+		return fmt.Errorf("chord [%s]: request %d does not exist", ch.n.String(), rID)
 	}
 	lookupChan <- result
 	return nil
@@ -114,12 +114,13 @@ func (ch *Chord) iterativeLookup(h UHash) (*Chord, error) {
 		ch.mu.Unlock()
 		return ch, nil
 	}
+	ch.mu.Unlock()
 
 	for {
 		temp, rCh, err := closest.RemoteFindClosestNode(h)
 		closest = temp
 		if err != nil {
-			return nil, fmt.Errorf("chord [%+v]: RemoteFindClosestNode on %v failed. Error: %v ", ch, h, err)
+			return nil, fmt.Errorf("chord [%s]: RemoteFindClosestNode on %v failed. Error: %v ", ch.n.String(), h, err)
 		}
 		if rCh != nil {
 			return rCh, nil
@@ -168,7 +169,7 @@ func (ch *Chord) Lookup(h UHash) (*Chord, error) {
 // Notify used to tell ch that n thinks it might be ch's predecessor.
 func (ch *Chord) Notify(n *Node) error {
 	if n == nil {
-		return fmt.Errorf("chord [%+v]: Notify called with nil node", ch)
+		return fmt.Errorf("chord [%s]: Notify called with nil node", ch.n.String())
 	}
 	ch.mu.Lock()
 	defer ch.mu.Unlock()
@@ -187,7 +188,6 @@ func (ch *Chord) Notify(n *Node) error {
 }
 
 // Pick a random entry in the finger table and check whether it is up to date.
-// THIS METHOD ASSUMES THAT IT IS CALLED FROM A LOCKING CONTEXT.
 func (ch *Chord) fixFingers() error {
 	i := rand.Intn(len(ch.ftable)-1) + 1
 	ftCh, err := ch.Lookup(ch.fTableStart(i))
@@ -195,7 +195,9 @@ func (ch *Chord) fixFingers() error {
 		return err
 	}
 
+	ch.mu.Lock()
 	ch.ftable[i] = ftCh.n
+	ch.mu.Unlock()
 	return nil
 }
 
@@ -214,7 +216,7 @@ func (ch *Chord) Stabilize() {
 			// TODO: Add fault tolerance with successor list
 			pSucc, err := ch.ftable[0].RemoteGetPred()
 			if err != nil {
-				log.Fatalf("chord [%s]: successor lookup failed: %s\n", ch.n, err)
+				log.Fatalf("chord [%s]: successor lookup failed: %s\n", ch.n.String(), err)
 			}
 
 			ch.mu.Lock()
@@ -222,18 +224,17 @@ func (ch *Chord) Stabilize() {
 				ch.ftable[0] = pSucc
 				ch.slist[0] = pSucc
 			}
+			ch.mu.Unlock()
+
 			err = ch.fixFingers()
 			if err != nil {
 				// Not sure how to handle this case. Going to fail loudly for now.
-				log.Fatalf("chord [%s]: fixFingers() failed: %s\n", ch.n, err)
+				log.Fatalf("chord [%s]: fixFingers() failed: %s\n", ch.n.String(), err)
 			}
-			ch.mu.Unlock()
 
 			err = ch.ftable[0].RemoteNotify(ch.n)
 			if err != nil {
-				// TODO: This should fail quietly, but going to throw fatal for now.
-				// Change to DPrintf(...) later.
-				log.Fatalf("chord [%s]: Notify(%s) failed: %s\n", ch.n, ch.ftable[0], err)
+				DPrintf("chord [%s]: Notify(%s) failed: %s\n", ch.n.String(), ch.ftable[0].String(), err)
 			}
 		}
 	}
@@ -295,8 +296,8 @@ func MakeChord(self *Node, existingNode *Node) (*Chord, error) {
 			ch.ftable[i] = ftCh.n
 		}
 
-		for i := 0; i < len(ch.slist); i++ {
-			ch.slist[i+1] = successor.slist[i]
+		for i := 1; i < len(ch.slist); i++ {
+			ch.slist[i] = successor.slist[i-1]
 		}
 	} else {
 		// No other nodes in the ring.

@@ -85,7 +85,11 @@ func initializeChordRing(size int) error {
 		}
 
 		// Check predecessor pointers
-		if chordInstances[i].predecessor.Hash != chordInstances[(i-1)%size].n.Hash {
+		idx := i - 1
+		if i == 0 {
+			idx = size - 1
+		}
+		if chordInstances[i].predecessor.Hash != chordInstances[idx].n.Hash {
 			return fmt.Errorf("Chord[%d] predecessor invalid", i)
 		}
 
