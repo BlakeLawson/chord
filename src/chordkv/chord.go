@@ -61,8 +61,6 @@ func (ch *Chord) recursiveLookup(h UHash) (*Chord, error) {
 	ch.respChanMap[rID] = respChan
 	ch.mu.Unlock()
 
-	// TODO: Pretty sure there is a race condition between unlock above and the
-	// lock in ForwardLookup.
 	ch.ForwardLookup(h, ch, rID)
 
 	// wait for result and then delete channel
