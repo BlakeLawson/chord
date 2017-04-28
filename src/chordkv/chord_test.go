@@ -5,28 +5,29 @@ package chordkv
 import (
 	"fmt"
 	"net"
-	// "sort"
+	"sort"
 	"testing"
+	"time"
 )
 
 // nodeSorter used to sort array of nodes by hash.
 type nodeSorter struct {
-	chords []*Chord
+	chords *[]*Chord
 }
 
 // Len is part of sort.Interface.
 func (ns *nodeSorter) Len() int {
-	return len(ns.chords)
+	return len(*ns.chords)
 }
 
 // Swap is part of sort.Interface.
 func (ns *nodeSorter) Swap(i, j int) {
-	ns.chords[i], ns.chords[j] = ns.chords[j], ns.chords[i]
+	(*ns.chords)[i], (*ns.chords)[j] = (*ns.chords)[j], (*ns.chords)[i]
 }
 
 // Less is part of sort.Interface.
 func (ns *nodeSorter) Less(i, j int) bool {
-	return ns.chords[i].n.Hash < ns.chords[j].n.Hash
+	return (*ns.chords)[i].n.Hash < (*ns.chords)[j].n.Hash
 }
 
 func initializeChordRing(size int) error {
@@ -34,19 +35,61 @@ func initializeChordRing(size int) error {
 		return fmt.Errorf("initializeChordRing called with invalid size %d", size)
 	}
 
-	// rpcInstances := make([]*RPCServer, size)
-	// chordInstances := make([]*Chord, size)
+	var err error
+	localhost := net.ParseIP("127.0.0.1")
+	basePort := 8888
+	sharedKV := &KVServer{}
+	rpcInstances := make([]*RPCServer, size)
+	chordInstances := make([]*Chord, size)
+
+	// First node
+	n := MakeNode(localhost, basePort)
+	chordInstances[0], err = MakeChord(n, nil)
+	if err != nil {
+		return fmt.Errorf("Chord[0] initialization failed: %s", err)
+	}
+	defer chordInstances[0].Kill()
+
+	rpcInstances[0], err = startRPC(chordInstances[0], sharedKV, n.String())
+	if err != nil {
+		return fmt.Errorf("RPCServer[0] initialization failed: %s", err)
+	}
+	defer rpcInstances[0].end()
 
 	// Initialization phase.
 	for i := 1; i < size; i++ {
+		n = MakeNode(localhost, basePort+i)
+		chordInstances[i], err = MakeChord(n, chordInstances[0].n)
+		if err != nil {
+			return fmt.Errorf("Chord[%d] initiailzation failed: %s", i, err)
+		}
+		defer chordInstances[i].Kill()
 
+		rpcInstances[i], err = startRPC(chordInstances[i], sharedKV, n.String())
+		if err != nil {
+			return fmt.Errorf("RPCServer[%d] initialization failed: %s", i, err)
+		}
+		defer rpcInstances[i].end()
 	}
 
-	// Validation phase.
-	// ns := &nodeSorter{chordInstances}
-	// sort.Sort(ns)
-	for i := 0; i < size; i++ {
+	// Give time to stabilize
+	time.Sleep(time.Duration(size) * time.Second)
 
+	// Validation phase.
+	ns := &nodeSorter{&chordInstances}
+	sort.Sort(ns)
+	for i := 0; i < size; i++ {
+		// Check successor pointers
+		if chordInstances[i].ftable[0].Hash != chordInstances[(i+1)%size].n.Hash {
+			return fmt.Errorf("Chord[%d] successor invalid", i)
+		}
+
+		// Check predecessor pointers
+		if chordInstances[i].predecessor.Hash != chordInstances[(i-1)%size].n.Hash {
+			return fmt.Errorf("Chord[%d] predecessor invalid", i)
+		}
+
+		// TODO: Add more invariant checks
 	}
 
 	return nil

@@ -23,6 +23,9 @@ const (
 type Chord struct {
 	mu sync.Mutex
 
+	// True if instance has not been killed yet
+	isRunning bool
+
 	// Network information about this Chord instance.
 	n *Node
 
@@ -264,6 +267,7 @@ func inRange(key UHash, min UHash, max UHash) bool {
 func MakeChord(self *Node, existingNode *Node) (*Chord, error) {
 	ch := &Chord{}
 	ch.n = self
+	ch.isRunning = true
 	ch.ftable = make([]*Node, fTableSize)
 	ch.slist = make([]*Node, sListSize)
 	ch.killChan = make(chan bool)
@@ -309,5 +313,12 @@ func MakeChord(self *Node, existingNode *Node) (*Chord, error) {
 
 // Kill disables the given Chord instance.
 func (ch *Chord) Kill() {
-	ch.killChan <- true
+	ch.mu.Lock()
+	if ch.isRunning {
+		ch.isRunning = false
+		ch.mu.Unlock()
+		ch.killChan <- true
+	} else {
+		ch.mu.Unlock()
+	}
 }

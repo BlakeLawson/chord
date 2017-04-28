@@ -227,7 +227,7 @@ func (rpcs *RPCServer) wait() error {
 // End the server if it is running. Returns nil on success.
 func (rpcs *RPCServer) end() error {
 	if !rpcs.isRunning() {
-		return fmt.Errorf("server not running")
+		return nil
 	}
 
 	if err := rpcs.servListener.Close(); err != nil {
