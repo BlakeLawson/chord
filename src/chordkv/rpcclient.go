@@ -3,6 +3,7 @@
 package chordkv
 
 import (
+	"fmt"
 	"net"
 	"net/rpc"
 	"time"
@@ -121,6 +122,21 @@ func (n *Node) RemoteForwardLookup(h UHash, source *Chord, rID int) error {
 // RemoteSendLookupResult sends the lookup result from the result chord node
 // to the source of the lookup with the request ID rID
 func (n *Node) RemoteSendLookupResult(rID int, result *Chord) error {
+	client, err := n.openConn()
+	if err != nil {
+		return err
+	}
+
+	args := &LookupResultArgs{
+		RID:      rID,
+		ChFields: *serializeChord(result)}
+
+	var reply LookupResultReply
+	err = client.Call("RPCServer.ReceiveLookupResult", args, &reply)
+
+	if err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -128,7 +144,23 @@ func (n *Node) RemoteSendLookupResult(rID int, result *Chord) error {
 // chord instance. This is to deal with the fact that many methods return a chord type
 // but the fingertable stores node information
 func (n *Node) RemoteGetChordFromNode() (*Chord, error) {
-	return nil, nil
+	client, err := n.openConn()
+	if err != nil {
+		return nil, err
+	}
+
+	var args GetChordFieldsArgs
+	var reply *GetChordFieldsReply
+	err = client.Call("RPCServer.GetChordFields", &args, reply)
+	if err != nil {
+		return nil, err
+	}
+	temp := ChordFields(*reply)
+	ch := deserializeChord(&temp)
+	if ch == nil {
+		return nil, fmt.Errorf("ChordFields reply empty %+v", ch)
+	}
+	return ch, nil
 }
 
 // RemotePing used for testing RPC functionality.

@@ -141,6 +141,18 @@ func deserializeChord(chFields *ChordFields) *Chord {
 		slist:       chFields.SList}
 }
 
+// GetChordFieldsArgs is an empty interface
+type GetChordFieldsArgs interface{}
+
+// GetChordFieldsReply is a ChordFields type
+type GetChordFieldsReply ChordFields
+
+// GetChordFields ...
+func (rpcs *RPCServer) GetChordFields(args *GetChordFieldsArgs, reply *GetChordFieldsReply) error {
+	*reply = GetChordFieldsReply(*serializeChord(rpcs.ch))
+	return nil
+}
+
 // ForwardLookupArgs holds arguments for FindClosestNode.
 type ForwardLookupArgs struct {
 	H        UHash
@@ -148,7 +160,7 @@ type ForwardLookupArgs struct {
 	ChFields ChordFields
 }
 
-// ForwardLookupReply holds reply to is an empty interface.
+// ForwardLookupReply is an empty interface.
 type ForwardLookupReply interface{}
 
 // ForwardLookup finds the closest node to a hash from the Chord instance on this server.
@@ -176,6 +188,25 @@ func (rpcs *RPCServer) isRunning() bool {
 	rpcs.mu.Lock()
 	defer rpcs.mu.Unlock()
 	return rpcs.running
+}
+
+// LookupResultArgs holds result of lookup
+type LookupResultArgs struct {
+	RID      int
+	ChFields ChordFields
+}
+
+// LookupResultReply is an empty interface.
+type LookupResultReply interface{}
+
+// ReceiveLookupResult receives the result of a recursive lookup
+func (rpcs *RPCServer) ReceiveLookupResult(args *LookupResultArgs, reply *LookupResultReply) error {
+	result := deserializeChord(&args.ChFields)
+	err := rpcs.ch.receiveLookUpResult(result, args.RID)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 // StartRPC creates an RPCServer listening on given port.
