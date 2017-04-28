@@ -7,7 +7,7 @@ import (
 	"log"
 )
 
-const debug = false
+const debug = true
 
 // Print functions
 
@@ -27,11 +27,11 @@ const (
 // CPrintf prints with colors. Only works in debugging mode.
 func CPrintf(c Color, format string, a ...interface{}) {
 	if debug {
-		log.Printf("%s%s%s", c, fmt.Sprintf(format, a), None)
+		log.Printf("%s%s%s", c, fmt.Sprintf(format, a...), None)
 	}
 }
 
 // DPrintf is debugging print statement
 func DPrintf(format string, a ...interface{}) {
-	CPrintf(None, format, a)
+	CPrintf(None, format, a...)
 }
