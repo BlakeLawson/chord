@@ -7,7 +7,7 @@ import (
 	"log"
 )
 
-const debug = true
+const debug = false
 
 // Print functions
 

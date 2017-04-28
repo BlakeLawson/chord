@@ -30,6 +30,31 @@ func (ns *nodeSorter) Less(i, j int) bool {
 	return (*ns.chords)[i].n.Hash < (*ns.chords)[j].n.Hash
 }
 
+// Given array of chord instances sorted by hash and a desired node hash, return
+// the array index for the node or the closest node to that hash.
+func findNearestNode(chords *[]*Chord, target UHash) int {
+	size := len(*chords)
+	if size <= 1 {
+		return 0
+	}
+
+	for i := 0; i < size; i++ {
+		if (*chords)[i].n.Hash == target {
+			return i
+		}
+		if inRange(target, (*chords)[i].n.Hash, (*chords)[(i+1)%size].n.Hash) {
+			return (i + 1) % size
+		}
+	}
+
+	// This should never happen.
+	return -1
+}
+
+// TODO: Figure out the right way to handle termination. Right now, the rpc
+// server may shut down before the chord instance, and if the chord instance
+// is in the process of stabilizing, then the chord instance panics and causing
+// the test to fail.
 func initializeChordRing(size int) error {
 	if size <= 0 {
 		return fmt.Errorf("initializeChordRing called with invalid size %d", size)
@@ -93,6 +118,14 @@ func initializeChordRing(size int) error {
 			return fmt.Errorf("Chord[%d] predecessor invalid", i)
 		}
 
+		// Check finger table
+		for j := 0; j < len(chordInstances[i].ftable); j++ {
+			expectedIdx := findNearestNode(&chordInstances, chordInstances[i].fTableStart(j))
+			if chordInstances[i].ftable[j].Hash != chordInstances[expectedIdx].n.Hash {
+				return fmt.Errorf("Chord[%d] ftable entry %d incorrect", i, j)
+			}
+		}
+
 		// TODO: Add more invariant checks
 	}
 
@@ -129,6 +162,9 @@ func TestChordThreeInitialization(t *testing.T) {
 	fmt.Println(" ... Passed")
 }
 
+// This function may give an error that says something along the lines of "too
+// many open files". There's a way to adjust the maximum number of files you
+// can have open at once, but Blake hasn't tried it yet.
 func TestChordManyInitialization(t *testing.T) {
 	fmt.Println("Test: Chord many initialization ...")
 	err := initializeChordRing(20)

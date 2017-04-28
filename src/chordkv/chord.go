@@ -16,7 +16,7 @@ const (
 	isIterative      bool          = true
 	sListSize        int           = 10
 	fTableSize       int           = 64
-	stabilizeTimeout time.Duration = 500 * time.Millisecond
+	stabilizeTimeout time.Duration = 100 * time.Millisecond
 )
 
 // Chord represents single Chord instance.
