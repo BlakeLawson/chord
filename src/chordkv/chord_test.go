@@ -150,7 +150,22 @@ func TestChordInRangeUnit(t *testing.T) {
 	// test wrap around min is before zero, max is after zero, h outside range
 	h = 5000
 	if inRange(h, min, max) {
-		t.Fatalf("inRange failed for wrap around. where h outside range %d < %d < %d", min, h, max)
+		t.Fatalf("inRange should have failed. Wrap around, where h outside range %d < %d < %d", min, h, max)
+	}
+
+	// test corner cases
+	h = 0
+	max = 0
+	min = MaxUHash
+	if !inRange(h, min, max) {
+		t.Fatalf("inRange failed for %d < %d < %d", min, h, max)
+	}
+
+	h = 0
+	max = 0
+	min = 0
+	if inRange(h, min, max) {
+		t.Fatalf("inRange should have failed. min should be excluded %d < %d < %d", min, h, max)
 	}
 
 	fmt.Println(" ... Passed")
