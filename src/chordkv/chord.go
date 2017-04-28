@@ -137,15 +137,18 @@ func (ch *Chord) FindClosestNode(h UHash) *Node {
 		return ch.n
 	}
 
-	// otherwise find the appropriate node in finger table
-	prevKey := ch.n.Hash
+	if inRange(h, ch.n.Hash, ch.ftable[0].Hash) {
+		return ch.ftable[0]
+	}
 
 	// for all nodes, check if key h falls in range,
-	for _, node := range ch.ftable {
-		if inRange(h, prevKey, node.Hash) {
+	for idx, node := range ch.ftable {
+		if idx+1 == fTableSize {
+			break
+		}
+		if inRange(h, node.Hash, ch.ftable[idx+1].Hash) {
 			return node
 		}
-		prevKey = node.Hash
 	}
 	// if not found in finger table, return last node in ftable.
 	return ch.ftable[fTableSize-1]
