@@ -248,6 +248,7 @@ func (ch *Chord) KeyRange() (uint64, uint64) {
 }
 
 // inRange checks if a key is within min (exclusive) and max (inclusive) on the chord ring.
+// TODO: what if a node is both min and max? how does that affect in range?
 func inRange(key UHash, min UHash, max UHash) bool {
 	// if this node respons
 	if min < max && key > min && key <= max {
@@ -273,6 +274,7 @@ func MakeChord(self *Node, existingNode *Node) (*Chord, error) {
 	ch.ftable = make([]*Node, fTableSize)
 	ch.slist = make([]*Node, sListSize)
 	ch.killChan = make(chan bool)
+	ch.respChanMap = make(map[int]chan *Chord)
 
 	// Initialize slist and ftable
 	if existingNode != nil {

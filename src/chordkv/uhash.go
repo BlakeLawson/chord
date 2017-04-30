@@ -14,6 +14,9 @@ type UHash uint64
 // MaxUHash is the maximum hash of UHash
 const MaxUHash = math.MaxUint64
 
+//TODO: make sure it is impossible for values to have MaxUHash
+//as when you mod by MaxUHash you get numbers less than it
+
 // Hash the given string.
 func Hash(v string) UHash {
 	sum := sha256.Sum256([]byte(v))
