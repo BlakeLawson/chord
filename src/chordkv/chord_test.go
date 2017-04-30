@@ -3,7 +3,10 @@
 package chordkv
 
 import (
+	"bytes"
 	"fmt"
+	"math"
+	"math/rand"
 	"net"
 	"sort"
 	"testing"
@@ -297,5 +300,198 @@ func TestChordFindClosestNodeUnit(t *testing.T) {
 		}
 	}
 
+	fmt.Println(" ... Passed")
+}
+
+// Initializes a chord instance from a node, all fields are initialized
+// ftable, slist and predecessor need to be updated with proper values elsewhere
+func InitChordFromNode(n *Node) *Chord {
+	ch := &Chord{}
+	ch.n = n
+	ch.isRunning = true
+	ch.ftable = make([]*Node, fTableSize)
+	ch.slist = make([]*Node, sListSize)
+	ch.killChan = make(chan bool)
+	ch.respChanMap = make(map[int]chan *Chord)
+	return ch
+}
+
+// initializes a chord lookup ring of the desired size.
+// returns the ring and rpc servers or an error
+func initializeLookupTestRing(size int) ([]*RPCServer, []*Chord, error) {
+	if size <= 0 {
+		return nil, nil, fmt.Errorf("initializeChordLookupRing called with invalid size %d", size)
+	}
+	var err error
+	localhost := net.ParseIP("127.0.0.1")
+	basePort := 8888
+	sharedKV := &KVServer{}
+	rpcInstances := make([]*RPCServer, size)
+	chordInstances := make([]*Chord, size)
+	// Create nodes, chord insances and rpcinstances
+	for i := 0; i < size; i++ {
+		n := MakeNode(localhost, basePort+i)
+		tempCh := InitChordFromNode(n)
+		chordInstances[i] = tempCh
+		rpcInstances[i], err = StartRPC(tempCh, sharedKV, basePort+i)
+		if err != nil {
+			return nil, nil, err
+		}
+	}
+	//sort chordInstances by hash
+	ns := &nodeSorter{&chordInstances}
+	sort.Sort(ns)
+
+	// for each chord in the list of sorted chord instances, update ftable slist
+	// and predecessor
+	for i, chInst := range chordInstances {
+		// initialize predecessor
+		prevIdx := posMod(i-1, size)
+		chInst.predecessor = chordInstances[prevIdx].n
+
+		// initialize successors
+		// TODO: what if size / num chordInstances is less than successor list size
+		for k := 0; k < sListSize; k++ {
+			chInst.slist[k] = chordInstances[(i+k+1)%size].n
+		}
+		// initialize fingertables
+		// find the first node in chordInstances that has a hash greater or equal to
+		// fingerKStart, this hash will also be greater than the current node so we can use inRange.
+		// TODO: handling corner cases of one or two nodes separately
+		idx := (i + 1) % size // first possible chordinstance for ftable is nect one after this
+		for k := range chInst.ftable {
+			fingerKStart := chInst.fTableStart(k)
+			found := false
+			for !found {
+				// when a node greater or equal to fingerKStart is found, add it to the fingertable
+				if inRange(fingerKStart, fingerKStart-1, chordInstances[idx].n.Hash) {
+					chInst.ftable[k] = chordInstances[idx].n
+					found = true
+					break
+				}
+				// else check if the next available chord instance is greater than the finger's hash
+				idx = (idx + 1) % size
+			}
+		}
+	}
+	return rpcInstances, chordInstances, nil
+}
+
+// tests the chord ring on keys starting from random nodes trials number of times.
+// can test on totally random keys or keys whose successor is a desired node
+// it is assumed that chord ring is a sorted list of chord instances.
+// returns an error if less than 100% of the lookups pass.
+func testLookups(numLookups int, chordInstances []*Chord, testType bool) error {
+	var r = rand.New(rand.NewSource(time.Now().UnixNano()))
+	var ringSize = len(chordInstances)
+	numCorrect := 0
+	for i := 0; i < numLookups; i++ {
+		// generate a random key based on testtype
+		var key UHash
+		var targetNodeHash UHash
+		if testType == Random {
+			//generate random key in between 0 and MaxUHash
+			key = UHash(r.Float64() * MaxUHash)
+		} else {
+			// randomly choose a target
+			targetID := posMod(r.Int(), ringSize)
+			targetNodeHash = chordInstances[targetID].n.Hash
+			prevNodeHash := chordInstances[posMod(targetID-1, ringSize)].n.Hash
+			keyRange := math.Abs(float64(targetNodeHash - prevNodeHash))
+			// let the key fall randomly between the targetNode and the node before it(exclusive).
+			key = (UHash(r.Float64()*keyRange) + prevNodeHash + 1) % MaxUHash
+		}
+
+		// pick a random node
+		idx := posMod(r.Int(), ringSize)
+		tempCh := chordInstances[idx]
+		// lookup the key
+		resultCh, err := tempCh.Lookup(key)
+
+		if err != nil {
+			return err
+		}
+
+		var correctCh *Chord
+		prev := ringSize - 1
+		for curr := 0; curr < ringSize; curr++ {
+			if inRange(key, chordInstances[prev].n.Hash, chordInstances[curr].n.Hash) {
+				correctCh = chordInstances[curr]
+				break
+			}
+			prev = curr
+		}
+
+		if testType == Controlled && correctCh.n.Hash != targetNodeHash {
+			return fmt.Errorf("\tError in test Code.\n\tTargetNodeHash %v is not equal to calculatedNodeHash %v\n. key is %v",
+				targetNodeHash, correctCh.n.Hash, key)
+		}
+
+		// match, increment number of correct lookups
+		if correctCh.n.Hash == resultCh.n.Hash {
+			//log.Printf("Match in Rand Lookup tests for key %v. Match found on node %v", key, resultCh.n.Hash)
+			numCorrect++
+		}
+
+		if correctCh == nil {
+			return fmt.Errorf("Issue in chord ring or test. key %v has no successor in chord ring", key)
+		}
+	}
+	// if all lookups were successful, return no error
+	if numCorrect == numLookups {
+		return nil
+	}
+
+	return fmt.Errorf("Lookup Test Failed.  Accuracy %v %%", float32(numCorrect)/float32(numLookups))
+}
+
+func ringHashesToString(chordInstances []*Chord) string {
+	sBuf := new(bytes.Buffer)
+	sBuf.WriteString("\tThese are the hashes of the nodes in the chord ring\n")
+	for idx, ch := range chordInstances {
+		sBuf.WriteString(fmt.Sprintf("\t%d: %v\n", idx, ch.n.Hash))
+	}
+	return sBuf.String()
+}
+
+// Code to test lookups within a chord ring. Where chord instances have
+// fingertables, predecessor and successor information initialized by test code
+// TODO: add code to shutDown RPCServers when bug fixed
+func TestLookup(t *testing.T) {
+	fmt.Println("Test: Chord Lookup tests ...")
+
+	var err error
+	_, ring, err := initializeLookupTestRing(5)
+
+	if err != nil {
+		sBuf := new(bytes.Buffer)
+		sBuf.WriteString("\tInitializing chord lookup test ring failed\n")
+		sBuf.WriteString(err.Error())
+		t.Fatal(sBuf)
+	}
+	fmt.Println("\tChord Ring Initialized")
+
+	numLookups := 10
+	fmt.Println("\tTesting Random Lookups")
+	err = testLookups(numLookups, ring, Random)
+	if err != nil {
+		sBuf := new(bytes.Buffer)
+		sBuf.WriteString(fmt.Sprintf("\tRandom Lookups Test failed for %d random lookups with error\n", numLookups))
+		sBuf.WriteString(err.Error())
+		sBuf.WriteString(ringHashesToString(ring))
+		t.Fatal(sBuf)
+	}
+	fmt.Println("\tFinished testing Random Lookups.")
+
+	fmt.Println("\tTesting Controlled Lookups")
+	err = testLookups(numLookups, ring, Controlled)
+	if err != nil {
+		sBuf := new(bytes.Buffer)
+		sBuf.WriteString(fmt.Sprintf("\tControlled Lookups Test failed for %d random lookups with error\n", numLookups))
+		sBuf.WriteString(err.Error())
+		sBuf.WriteString(ringHashesToString(ring))
+		t.Fatal(sBuf)
+	}
+	fmt.Println("\tFinished testing Controlled Lookups.")
 	fmt.Println(" ... Passed")
 }
