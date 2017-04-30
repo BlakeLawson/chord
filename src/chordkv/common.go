@@ -15,13 +15,15 @@ const debug = false
 type Color string
 
 const (
-	None   Color = "\033[0m"
-	Red    Color = "\033[0;31m"
-	Green  Color = "\033[0;32m"
-	Blue   Color = "\033[0;34m"
-	Yellow Color = "\033[1;33m"
-	Gray   Color = "\033[1;30m"
-	White  Color = "\033[1;37m"
+	None       Color = "\033[0m"
+	Red        Color = "\033[0;31m"
+	Green      Color = "\033[0;32m"
+	Blue       Color = "\033[0;34m"
+	Yellow     Color = "\033[1;33m"
+	Gray       Color = "\033[1;30m"
+	White      Color = "\033[1;37m"
+	Random     bool  = false
+	Controlled bool  = true
 )
 
 // CPrintf prints with colors. Only works in debugging mode.
@@ -34,4 +36,13 @@ func CPrintf(c Color, format string, a ...interface{}) {
 // DPrintf is debugging print statement
 func DPrintf(format string, a ...interface{}) {
 	CPrintf(None, format, a...)
+}
+
+// calculates the remainder of two numbers, ensures it is positive
+func posMod(x, y int) int {
+	z := x % y
+	if z < 0 {
+		z = z + y
+	}
+	return z
 }
