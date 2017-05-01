@@ -474,7 +474,7 @@ func TestLookup(t *testing.T) {
 	fmt.Println("Test: Chord Lookup tests ...")
 
 	var err error
-	rpcss, ring, err := initializeLookupTestRing(5)
+	rpcss, ring, err := initializeLookupTestRing(100)
 	if err != nil {
 		sBuf := new(bytes.Buffer)
 		sBuf.WriteString("\tInitializing chord lookup test ring failed\n")
@@ -489,7 +489,7 @@ func TestLookup(t *testing.T) {
 
 	fmt.Println("\tChord Ring Initialized")
 
-	numLookups := 50
+	numLookups := 100
 	fmt.Println("\tTesting Random Lookups")
 	err = testLookups(numLookups, ring, random)
 	if err != nil {

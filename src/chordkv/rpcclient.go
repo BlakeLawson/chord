@@ -23,6 +23,7 @@ func (n *Node) RemoteGet(key string) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	defer client.Close()
 
 	args := &KVGetArgs{key}
 	var reply KVGetReply
@@ -39,6 +40,7 @@ func (n *Node) RemotePut(key string, val string) error {
 	if err != nil {
 		return err
 	}
+	defer client.Close()
 
 	args := &KVPutArgs{key, val}
 	var reply KVPutReply
@@ -52,6 +54,7 @@ func (n *Node) RemoteLookup(h UHash) (*Chord, error) {
 	if err != nil {
 		return nil, err
 	}
+	defer client.Close()
 
 	args := &ChordLookupArgs{h}
 	var reply ChordLookupReply
@@ -69,6 +72,7 @@ func (n *Node) RemoteGetPred() (*Node, error) {
 	if err != nil {
 		return nil, err
 	}
+	defer client.Close()
 
 	args := new(GetPredArgs)
 	var reply GetPredReply
@@ -88,6 +92,7 @@ func (n *Node) RemoteFindClosestNode(h UHash) (*Node, *Chord, error) {
 	if err != nil {
 		return nil, nil, err
 	}
+	defer client.Close()
 
 	args := &FindClosestArgs{h}
 	var reply FindClosestReply
@@ -105,6 +110,7 @@ func (n *Node) RemoteForwardLookup(h UHash, source *Chord, rID int) error {
 	if err != nil {
 		return err
 	}
+	defer client.Close()
 
 	args := &ForwardLookupArgs{
 		H:        h,
@@ -126,6 +132,7 @@ func (n *Node) RemoteSendLookupResult(rID int, result *Chord) error {
 	if err != nil {
 		return err
 	}
+	defer client.Close()
 
 	args := &LookupResultArgs{
 		RID:      rID,
@@ -148,6 +155,7 @@ func (n *Node) RemoteGetChordFromNode() (*Chord, error) {
 	if err != nil {
 		return nil, err
 	}
+	defer client.Close()
 
 	var args GetChordFieldsArgs
 	var reply *GetChordFieldsReply
@@ -169,6 +177,7 @@ func (n *Node) RemotePing() error {
 	if err != nil {
 		return err
 	}
+	defer client.Close()
 
 	var reply struct{}
 	return client.Call("RPCServer.Ping", reply, &reply)
@@ -180,6 +189,7 @@ func (n *Node) RemoteNotify(pred *Node) error {
 	if err != nil {
 		return err
 	}
+	defer client.Close()
 
 	var reply struct{}
 	return client.Call("RPCServer.ChordNotify", pred, &reply)
