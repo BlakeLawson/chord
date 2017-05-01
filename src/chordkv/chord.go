@@ -213,7 +213,7 @@ func (ch *Chord) Stabilize() {
 			// Verify successor pointer up to date and update finger table.
 			// TODO: Add fault tolerance with successor list
 			pSucc, err := ch.ftable[0].RemoteGetPred()
-			if err != nil {
+			if err != nil && !ch.checkRunning() {
 				log.Fatalf("chord [%s]: successor lookup failed: %s\n", ch.n.String(), err)
 			}
 
@@ -225,13 +225,13 @@ func (ch *Chord) Stabilize() {
 			ch.mu.Unlock()
 
 			err = ch.fixFingers()
-			if err != nil {
+			if err != nil && !ch.checkRunning() {
 				// Not sure how to handle this case. Going to fail loudly for now.
 				log.Fatalf("chord [%s]: fixFingers() failed: %s\n", ch.n.String(), err)
 			}
 
 			err = ch.ftable[0].RemoteNotify(ch.n)
-			if err != nil {
+			if err != nil && !ch.checkRunning() {
 				DPrintf("chord [%s]: Notify(%s) failed: %s\n", ch.n.String(), ch.ftable[0].String(), err)
 			}
 		}
@@ -313,6 +313,14 @@ func MakeChord(self *Node, existingNode *Node) (*Chord, error) {
 	// Start Stabilize thread in the background.
 	go ch.Stabilize()
 	return ch, nil
+}
+
+// Return true if this chord instance is running. Else return false to
+// indicate that it has been killed.
+func (ch *Chord) checkRunning() bool {
+	ch.mu.Lock()
+	defer ch.mu.Unlock()
+	return ch.isRunning
 }
 
 // Kill disables the given Chord instance.

@@ -54,10 +54,6 @@ func findNearestNode(chords *[]*Chord, target UHash) int {
 	return -1
 }
 
-// TODO: Figure out the right way to handle termination. Right now, the rpc
-// server may shut down before the chord instance, and if the chord instance
-// is in the process of stabilizing, then the chord instance panics and causing
-// the test to fail.
 func initializeChordRing(size int) error {
 	if size <= 0 {
 		return fmt.Errorf("initializeChordRing called with invalid size %d", size)
@@ -76,13 +72,16 @@ func initializeChordRing(size int) error {
 	if err != nil {
 		return fmt.Errorf("Chord[0] initialization failed: %s", err)
 	}
-	defer chordInstances[0].Kill()
 
 	rpcInstances[0], err = startRPC(chordInstances[0], sharedKV, n.String())
 	if err != nil {
+		chordInstances[0].Kill()
 		return fmt.Errorf("RPCServer[0] initialization failed: %s", err)
 	}
+
+	// End chord instance before server.
 	defer rpcInstances[0].end()
+	defer chordInstances[0].Kill()
 
 	// Initialization phase.
 	for i := 1; i < size; i++ {
@@ -91,13 +90,16 @@ func initializeChordRing(size int) error {
 		if err != nil {
 			return fmt.Errorf("Chord[%d] initiailzation failed: %s", i, err)
 		}
-		defer chordInstances[i].Kill()
 
 		rpcInstances[i], err = startRPC(chordInstances[i], sharedKV, n.String())
 		if err != nil {
+			chordInstances[i].Kill()
 			return fmt.Errorf("RPCServer[%d] initialization failed: %s", i, err)
 		}
+
+		// End chord instance before server
 		defer rpcInstances[i].end()
+		defer chordInstances[i].Kill()
 	}
 
 	// Give time to stabilize
@@ -170,7 +172,7 @@ func TestChordThreeInitialization(t *testing.T) {
 // can have open at once, but Blake hasn't tried it yet.
 func TestChordManyInitialization(t *testing.T) {
 	fmt.Println("Test: Chord many initialization ...")
-	err := initializeChordRing(20)
+	err := initializeChordRing(10)
 	if err != nil {
 		t.Fatalf("Chord single initialization failed: %s", err)
 	}
