@@ -15,15 +15,13 @@ const debug = false
 type Color string
 
 const (
-	None       Color = "\033[0m"
-	Red        Color = "\033[0;31m"
-	Green      Color = "\033[0;32m"
-	Blue       Color = "\033[0;34m"
-	Yellow     Color = "\033[1;33m"
-	Gray       Color = "\033[1;30m"
-	White      Color = "\033[1;37m"
-	Random     bool  = false
-	Controlled bool  = true
+	None   Color = "\033[0m"
+	Red    Color = "\033[0;31m"
+	Green  Color = "\033[0;32m"
+	Blue   Color = "\033[0;34m"
+	Yellow Color = "\033[1;33m"
+	Gray   Color = "\033[1;30m"
+	White  Color = "\033[1;37m"
 )
 
 // CPrintf prints with colors. Only works in debugging mode.
