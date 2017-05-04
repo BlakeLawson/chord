@@ -33,7 +33,9 @@ func CPrintf(c Color, format string, a ...interface{}) {
 
 // DPrintf is debugging print statement
 func DPrintf(format string, a ...interface{}) {
-	CPrintf(None, format, a...)
+	if debug {
+		log.Printf(format, a...)
+	}
 }
 
 // calculates the remainder of two numbers, ensures it is positive
