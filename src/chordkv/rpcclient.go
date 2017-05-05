@@ -194,3 +194,15 @@ func (n *Node) RemoteNotify(pred *Node) error {
 	var reply struct{}
 	return client.Call("RPCServer.ChordNotify", pred, &reply)
 }
+
+// RemoteUpdateFtable calls UpdateFtable on n.
+func (n *Node) RemoteUpdateFtable(m *Node, i int) error {
+	client, err := n.openConn()
+	if err != nil {
+		return err
+	}
+	defer client.Close()
+
+	var reply struct{}
+	return client.Call("RPCServer.UpdateFtable", &UpdateFtableArgs{m, i}, &reply)
+}

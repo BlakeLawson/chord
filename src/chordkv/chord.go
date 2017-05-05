@@ -16,7 +16,7 @@ const (
 	// TODO: revisit these numbers
 	isIterative      bool          = true
 	sListSize        int           = 10
-	fTableSize       int           = 64
+	ftableSize       int           = 64
 	stabilizeTimeout time.Duration = 75 * time.Millisecond
 )
 
@@ -144,7 +144,7 @@ func (ch *Chord) FindClosestNode(h UHash) *Node {
 	}
 
 	// for all nodes, check if key h falls in range,
-	for i := 0; i < fTableSize-1; i++ {
+	for i := 0; i < ftableSize-1; i++ {
 		node := ch.ftable[i]
 		if inRange(h, node.Hash, ch.ftable[i+1].Hash) {
 			return node
@@ -152,7 +152,7 @@ func (ch *Chord) FindClosestNode(h UHash) *Node {
 	}
 
 	// if not found in finger table, return last node in ftable.
-	return ch.ftable[fTableSize-1]
+	return ch.ftable[ftableSize-1]
 }
 
 // Lookup node responsible for key. Returns the node and its predecessor.
@@ -267,13 +267,99 @@ func inRange(key UHash, min UHash, max UHash) bool {
 	return false
 }
 
+// UpdateFtable is an RPC endpoint called by other chord nodes that think they
+// may belong in ch's ftable at entry i.
+func (ch *Chord) UpdateFtable(n *Node, i int) error {
+	if n == nil {
+		return fmt.Errorf("UpdateFtable: nil node")
+	}
+	if i < 0 || i >= ftableSize {
+		return fmt.Errorf("UpdateFtable: Invalid ftable index %d", i)
+	}
+
+	ch.mu.Lock()
+	if inRange(n.Hash, ch.ftableStart(i), ch.ftable[i].Hash) {
+		ch.ftable[i] = n
+		p := ch.predecessor
+		ch.mu.Unlock()
+
+		// Notify predecessor since its ftable may also change.
+		go func() {
+			err := p.RemoteUpdateFtable(n, i)
+			if err != nil {
+				DPrintf("chord[%016x]: UpdateFtable: (%016x).RemoteUpdateFtable"+
+					"(%016x, %d) failed: %s", ch.n.Hash, p.Hash, n.Hash, i, err)
+			}
+		}()
+	} else {
+		ch.mu.Unlock()
+	}
+
+	return nil
+}
+
+// findPredecessor finds the predecessor for the given key.
+func (ch *Chord) findPredecessor(h UHash) (*Node, error) {
+	successor, err := ch.Lookup(h)
+	if err != nil {
+		return nil, err
+	}
+	return successor.predecessor, nil
+}
+
+// priorFtableOwner returns the UHash of a node that may have ch in its ftable
+// at entry i.
+func (ch *Chord) priorFtableOwner(i int) UHash {
+	x := new(big.Int).SetUint64(uint64(ch.n.Hash))
+	y := new(big.Int).SetUint64(uint64(math.Pow(2, float64(i))))
+	diff := new(big.Int).Sub(x, y)
+
+	// Ensure result is mod MaxUint64
+	if diff.Sign() < 0 {
+		diff = diff.Add(diff, new(big.Int).SetUint64(math.MaxUint64))
+	}
+
+	return UHash(diff.Uint64())
+}
+
+// updateOthers notifies other chord nodes that they need to update their
+// finger tables.
+func (ch *Chord) updateOthers() {
+	wg := new(sync.WaitGroup)
+	for i := 0; i < ftableSize; i++ {
+		wg.Add(1)
+		go func(j int) {
+			defer wg.Done()
+
+			// Calculate node that would have ch in ftable entry j.
+			owner := ch.priorFtableOwner(j)
+
+			// Find nearest responsible node.
+			pred, err := ch.findPredecessor(owner)
+			if err != nil {
+				DPrintf("chord[%016x]: findPredecessor(%016x) failed: %s",
+					ch.n.Hash, owner, err)
+				return
+			}
+
+			// Update node's ftable.
+			err = pred.RemoteUpdateFtable(ch.n, j)
+			if err != nil {
+				DPrintf("chord[%016x]: (%016x).RemoteUpdateFtable(%016x, %d) failed: %s",
+					ch.n.Hash, pred.Hash, ch.n.Hash, j)
+			}
+		}(i)
+	}
+	wg.Wait()
+}
+
 // MakeChord creates object and join the Chord ring. If existingNode is null,
 // then this Chord node is first.
 func MakeChord(self *Node, existingNode *Node) (*Chord, error) {
 	ch := &Chord{}
 	ch.n = self
 	ch.isRunning = true
-	ch.ftable = make([]*Node, fTableSize)
+	ch.ftable = make([]*Node, ftableSize)
 	ch.slist = make([]*Node, sListSize)
 	ch.killChan = make(chan bool)
 	ch.respChanMap = make(map[int]chan *Chord)

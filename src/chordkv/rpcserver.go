@@ -166,11 +166,7 @@ type ForwardLookupReply interface{}
 // ForwardLookup finds the closest node to a hash from the Chord instance on this server.
 func (rpcs *RPCServer) ForwardLookup(args *ForwardLookupArgs, reply *ForwardLookupReply) error {
 	source := deserializeChord(&args.ChFields)
-	err := rpcs.ch.ForwardLookup(args.H, source, args.RID)
-	if err != nil {
-		return err
-	}
-	return nil
+	return rpcs.ch.ForwardLookup(args.H, source, args.RID)
 }
 
 // ChordNotify calls notify on local chord instance.
@@ -202,11 +198,18 @@ type LookupResultReply interface{}
 // ReceiveLookupResult receives the result of a recursive lookup
 func (rpcs *RPCServer) ReceiveLookupResult(args *LookupResultArgs, reply *LookupResultReply) error {
 	result := deserializeChord(&args.ChFields)
-	err := rpcs.ch.receiveLookUpResult(result, args.RID)
-	if err != nil {
-		return err
-	}
-	return nil
+	return rpcs.ch.receiveLookUpResult(result, args.RID)
+}
+
+// UpdateFtableArgs are arguments to UpdateFtable.
+type UpdateFtableArgs struct {
+	N *Node
+	I int
+}
+
+// UpdateFtable is RPC endpoint for chord.UpdateFtable().
+func (rpcs *RPCServer) UpdateFtable(args *UpdateFtableArgs, reply *struct{}) error {
+	return rpcs.ch.UpdateFtable(args.N, args.I)
 }
 
 // StartRPC creates an RPCServer listening on given port.
