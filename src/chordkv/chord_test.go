@@ -80,13 +80,11 @@ func initializeChordRing(size int) error {
 	defer rpcInstances[0].end()
 	defer chordInstances[0].Kill()
 
-	DPrintf("Initialized chord[%s] (%016x)", chordInstances[0].n.String(), chordInstances[0].n.Hash)
+	DPrintf("Initialized chord[%s] (%016x)", chordInstances[0].n.String(),
+		chordInstances[0].n.Hash)
 
 	// Initialization phase.
 	for i := 1; i < size; i++ {
-		// Allow stabilization time.
-		// time.Sleep(2 * time.Duration(i + 1) * time.Second)
-
 		n = MakeNode(localhost, basePort+i)
 		chordInstances[i], err = MakeChord(n, chordInstances[0].n)
 		if err != nil {
@@ -102,12 +100,12 @@ func initializeChordRing(size int) error {
 		// End chord instance before server
 		defer rpcInstances[i].end()
 		defer chordInstances[i].Kill()
-		DPrintf("Initialized chord[%s] (%016x)", chordInstances[i].n.String(), chordInstances[i].n.Hash)
-		time.Sleep(15 * time.Second)
-	}
+		DPrintf("Initialized chord[%s] (%016x)", chordInstances[i].n.String(),
+			chordInstances[i].n.Hash)
 
-	// Give time to stabilize
-	// time.Sleep(10 * time.Duration(size) * time.Second)
+		// Give time to stabilize
+		time.Sleep(500 * time.Millisecond)
+	}
 
 	// Validation phase.
 	ns := &nodeSorter{&chordInstances}
@@ -131,9 +129,15 @@ func initializeChordRing(size int) error {
 		for j := 1; j < len(chordInstances[i].ftable); j++ {
 			expectedIdx := findKeyOwner(&chordInstances, chordInstances[i].ftableStart(j))
 			if chordInstances[i].ftable[j].Hash != chordInstances[expectedIdx].n.Hash {
-				CPrintf(White, "Chord[%s] (%016x) ftable entry %d incorrect", chordInstances[i].n.String(), chordInstances[i].n.Hash, j)
-				CPrintf(White, "Expected ch[%s].ftable[%02d] = %016x", chordInstances[i].n.String(), j, chordInstances[expectedIdx].n.Hash)
-				CPrintf(White, "Actual   ch[%s].ftable[%02d] = %016x", chordInstances[i].n.String(), j, chordInstances[i].ftable[j].Hash)
+				ch := chordInstances[i]
+				chHash := ch.n.Hash
+				DPrintf("Chord[%016x].ftable:", chHash)
+				for k, n := range ch.ftable {
+					DPrintf("ftable[%02d]: %016x", k, n.Hash)
+				}
+				CPrintf(White, "Chord[%016x] ftable entry %d incorrect", chHash, j)
+				CPrintf(White, "Expected ch[%016x].ftable[%02d] = %016x", chHash, j, chordInstances[expectedIdx].n.Hash)
+				CPrintf(White, "Actual   ch[%016x].ftable[%02d] = %016x", chHash, j, ch.ftable[j].Hash)
 				chString := ""
 				for _, ch := range chordInstances {
 					chString += fmt.Sprintf("%016x ", ch.n.Hash)
@@ -144,10 +148,6 @@ func initializeChordRing(size int) error {
 		}
 
 		// TODO: Add more invariant checks
-	}
-
-	for i, n := range chordInstances[0].ftable {
-		DPrintf("chord [%s]: ftable[%02d]: %016x", chordInstances[0].n.String(), i, n.Hash)
 	}
 
 	return nil
@@ -187,9 +187,8 @@ func TestChordThreeInitialization(t *testing.T) {
 // many open files". There's a way to adjust the maximum number of files you
 // can have open at once, but Blake hasn't tried it yet.
 func TestChordManyInitialization(t *testing.T) {
-	fmt.Println("Test: Chord many initialization ...")
-	// NOTE: running with size 10 works
-	testSize := 10
+	testSize := 50
+	fmt.Printf("Test: Chord %d initializations ...\n", testSize)
 	err := initializeChordRing(testSize)
 	if err != nil {
 		t.Fatalf("Chord many initialization failed: %s", err)
@@ -206,7 +205,7 @@ func makeSimpleChord() *Chord {
 	ch := &Chord{}
 	ch.n = MakeNode(localhost, 8888)
 	ch.predecessor = &Node{localhost, 0, ch.n.Hash - 1000}
-	ch.ftable = make([]*Node, fTableSize)
+	ch.ftable = make([]*Node, ftableSize)
 	ch.slist = make([]*Node, sListSize)
 
 	// Initialize lists
@@ -328,7 +327,7 @@ func TestChordFindClosestNodeUnit(t *testing.T) {
 func initChordFromNode(n *Node) *Chord {
 	ch := &Chord{}
 	ch.n = n
-	ch.ftable = make([]*Node, fTableSize)
+	ch.ftable = make([]*Node, ftableSize)
 	ch.slist = make([]*Node, sListSize)
 	ch.isRunning = false
 	ch.killChan = nil
@@ -382,12 +381,6 @@ func initializeLookupTestRing(size int) ([]*RPCServer, []*Chord, error) {
 		for j := range chInst.ftable {
 			idx := findKeyOwner(&chordInstances, chInst.ftableStart(j))
 			chInst.ftable[j] = chordInstances[idx].n
-			// 		if j == 0 {
-			// 			DPrintf("setting chord[%016x].ftable[0] = %016x",
-			// 				chInst.n.Hash, chordInstances[idx].n.Hash)
-			// 			DPrintf("chInst.ftableStart(%d) = %016x", j, chInst.ftableStart(j))
-			// 			DPrintf("findKeyOwner() = %d", findKeyOwner(&chordInstances, chInst.ftableStart(j)))
-			// 		}
 		}
 	}
 	return rpcInstances, chordInstances, nil

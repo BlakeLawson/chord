@@ -17,7 +17,7 @@ const (
 	isIterative      bool          = true
 	sListSize        int           = 10
 	ftableSize       int           = 64
-	stabilizeTimeout time.Duration = 75 * time.Millisecond
+	stabilizeTimeout time.Duration = 250 * time.Millisecond
 )
 
 // Chord represents single Chord instance.
@@ -122,7 +122,8 @@ func (ch *Chord) iterativeLookup(h UHash) (*Chord, error) {
 		temp, rCh, err := closest.RemoteFindClosestNode(h)
 		closest = temp
 		if err != nil {
-			return nil, fmt.Errorf("chord [%s]: RemoteFindClosestNode on %v failed. Error: %v ", ch.n.String(), h, err)
+			return nil, fmt.Errorf("chord [%s]: RemoteFindClosestNode on %016x failed: %s",
+				ch.n.String(), h, err)
 		}
 		if rCh != nil {
 			return rCh, nil
@@ -189,7 +190,7 @@ func (ch *Chord) fixFingers() error {
 	i := rand.Intn(len(ch.ftable)-1) + 1
 	ftCh, err := ch.Lookup(ch.ftableStart(i))
 	if err != nil {
-		return err
+		return fmt.Errorf("error on %d: %s", i, err)
 	}
 
 	ch.mu.Lock()
@@ -214,26 +215,38 @@ func (ch *Chord) Stabilize() {
 			// TODO: Double check concurrency controls here.
 			go func() {
 				pSucc, err := ch.ftable[0].RemoteGetPred()
-				if err != nil && !ch.checkRunning() {
-					log.Fatalf("chord [%s]: successor lookup failed: %s\n", ch.n.String(), err)
+				if !ch.checkRunning() {
+					return
 				}
-
-				ch.mu.Lock()
-				if inRange(pSucc.Hash, ch.n.Hash, ch.ftable[0].Hash) {
-					ch.ftable[0] = pSucc
-					ch.slist[0] = pSucc
+				if err != nil {
+					DPrintf("chord [%s]: successor lookup failed: %s\n",
+						ch.n.String(), err)
+				} else {
+					ch.mu.Lock()
+					if inRange(pSucc.Hash, ch.n.Hash, ch.ftable[0].Hash) {
+						ch.ftable[0] = pSucc
+						ch.slist[0] = pSucc
+					}
+					ch.mu.Unlock()
 				}
-				ch.mu.Unlock()
 
 				err = ch.fixFingers()
-				if err != nil && !ch.checkRunning() {
+				if !ch.checkRunning() {
+					return
+				}
+				if err != nil {
 					// Not sure how to handle this case. Going to fail loudly for now.
-					log.Fatalf("chord [%s]: fixFingers() failed: %s\n", ch.n.String(), err)
+					DPrintf("chord [%s]: fixFingers() failed: %s\n",
+						ch.n.String(), err)
 				}
 
 				err = ch.ftable[0].RemoteNotify(ch.n)
-				if err != nil && !ch.checkRunning() {
-					DPrintf("chord [%s]: Notify(%s) failed: %s\n", ch.n.String(), ch.ftable[0].String(), err)
+				if !ch.checkRunning() {
+					return
+				}
+				if err != nil {
+					DPrintf("chord [%s]: Notify(%s) failed: %s\n", ch.n.String(),
+						ch.ftable[0].String(), err)
 				}
 			}()
 		}
@@ -284,13 +297,15 @@ func (ch *Chord) UpdateFtable(n *Node, i int) error {
 		ch.mu.Unlock()
 
 		// Notify predecessor since its ftable may also change.
-		go func() {
-			err := p.RemoteUpdateFtable(n, i)
-			if err != nil {
-				DPrintf("chord[%016x]: UpdateFtable: (%016x).RemoteUpdateFtable"+
-					"(%016x, %d) failed: %s", ch.n.Hash, p.Hash, n.Hash, i, err)
-			}
-		}()
+		if p.Hash != n.Hash {
+			go func() {
+				err := p.RemoteUpdateFtable(n, i)
+				if err != nil {
+					DPrintf("chord[%016x]: UpdateFtable: (%016x).RemoteUpdateFtable"+
+						"(%016x, %d) failed: %s", ch.n.Hash, p.Hash, n.Hash, i, err)
+				}
+			}()
+		}
 	} else {
 		ch.mu.Unlock()
 	}
@@ -342,11 +357,13 @@ func (ch *Chord) updateOthers() {
 				return
 			}
 
-			// Update node's ftable.
-			err = pred.RemoteUpdateFtable(ch.n, j)
-			if err != nil {
-				DPrintf("chord[%016x]: (%016x).RemoteUpdateFtable(%016x, %d) failed: %s",
-					ch.n.Hash, pred.Hash, ch.n.Hash, j)
+			if pred.Hash != ch.n.Hash {
+				// Update node's ftable.
+				err = pred.RemoteUpdateFtable(ch.n, j)
+				if err != nil {
+					DPrintf("chord[%016x]: (%016x).RemoteUpdateFtable(%016x, %d) failed: %s",
+						ch.n.Hash, pred.Hash, ch.n.Hash, j)
+				}
 			}
 		}(i)
 	}
@@ -391,6 +408,9 @@ func MakeChord(self *Node, existingNode *Node) (*Chord, error) {
 		if err != nil {
 			log.Fatalf("chord [%s]: initial notify failed: %s", ch.n.String(), err)
 		}
+
+		// Update other node's finger tables.
+		ch.updateOthers()
 	} else {
 		// No other nodes in the ring.
 		ch.predecessor = ch.n
