@@ -70,11 +70,18 @@ func (ch *Chord) recursiveLookup(h UHash) (*Chord, error) {
 
 	// recursively find correct node and send result.
 	var wg sync.WaitGroup
+	var err error
 	wg.Add(1)
-	go func(pwg *sync.WaitGroup) {
+
+	go func(pwg *sync.WaitGroup, pErr *error) {
 		defer pwg.Done()
-		ch.ForwardLookup(h, ch, rID)
-	}(&wg)
+		*pErr = ch.ForwardLookup(h, ch, rID)
+		// if lookup fails, send nil chord into chan.
+		if *pErr != nil {
+			log.Fatal((*pErr).Error())
+			respChan <- nil
+		}
+	}(&wg, &err)
 
 	// wait for result and then delete channel
 	chRes := <-respChan
@@ -83,6 +90,12 @@ func (ch *Chord) recursiveLookup(h UHash) (*Chord, error) {
 	ch.mu.Lock()
 	delete(ch.respChanMap, rID)
 	ch.mu.Unlock()
+
+	// if lookup fails return err
+	if err != nil {
+		return nil, err
+	}
+
 	return chRes, nil
 }
 
