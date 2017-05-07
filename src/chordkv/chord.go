@@ -68,10 +68,17 @@ func (ch *Chord) recursiveLookup(h UHash) (*Chord, error) {
 	ch.respChanMap[rID] = respChan
 	ch.mu.Unlock()
 
-	ch.ForwardLookup(h, ch, rID)
+	// recursively find correct node and send result.
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func(pwg *sync.WaitGroup) {
+		defer pwg.Done()
+		ch.ForwardLookup(h, ch, rID)
+	}(&wg)
 
 	// wait for result and then delete channel
 	chRes := <-respChan
+	wg.Wait()
 
 	ch.mu.Lock()
 	delete(ch.respChanMap, rID)
@@ -81,10 +88,11 @@ func (ch *Chord) recursiveLookup(h UHash) (*Chord, error) {
 
 // ForwardLookup forwards the lookup to an appropriate node closer to h. If this
 // chord instance is responsible for h, it lets the source of the lookup know.
+// TODO: should this be done in a go routine? This blocks when a request is forwarded until last node sens resul
 func (ch *Chord) ForwardLookup(h UHash, source *Chord, rID int) error {
 	// base case. if this node is responsible for h, let the source of the lookup know
 	ch.mu.Lock()
-	if inRange(h, ch.predecessor.Hash, ch.ftable[0].Hash) {
+	if inRange(h, ch.predecessor.Hash, ch.n.Hash) {
 		ch.mu.Unlock()
 		source.n.RemoteSendLookupResult(rID, ch)
 		return nil

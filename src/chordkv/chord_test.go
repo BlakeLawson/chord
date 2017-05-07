@@ -508,7 +508,7 @@ func TestLookup(t *testing.T) {
 		sBuf.WriteString(ringHashesToString(ring))
 		t.Fatal(sBuf)
 	}
-	fmt.Println("\tFinished testing Random Lookups.")
+	fmt.Printf("\tFinished testing %d Random Lookups.\n", numLookups)
 
 	fmt.Println("\tTesting Controlled Lookups")
 	err = testLookups(numLookups, ring, controlled)
@@ -519,6 +519,6 @@ func TestLookup(t *testing.T) {
 		sBuf.WriteString(ringHashesToString(ring))
 		t.Fatal(sBuf)
 	}
-	fmt.Println("\tFinished testing Controlled Lookups.")
+	fmt.Printf("\tFinished testing %d Controlled Lookups.\n", numLookups)
 	fmt.Println(" ... Passed")
 }
