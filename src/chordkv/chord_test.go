@@ -479,7 +479,12 @@ func ringHashesToString(chordInstances []*Chord) string {
 // Code to test lookups within a chord ring. Where chord instances have
 // fingertables, predecessor and successor information initialized by test code
 func TestLookup(t *testing.T) {
-	fmt.Println("Test: Chord Lookup tests ...")
+	lookupType := "Iterative"
+	if !isIterative {
+		lookupType = "Recursive"
+	}
+
+	fmt.Printf("Test: Chord %s Lookup tests ...", lookupType)
 	testSize := 100
 	numLookups := 1000
 
