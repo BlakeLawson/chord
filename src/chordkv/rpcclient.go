@@ -117,7 +117,7 @@ func (n *Node) RemoteForwardLookup(h UHash, source *Chord, rID int) error {
 		RID:      rID,
 		ChFields: *serializeChord(source)}
 
-	var reply FindClosestReply
+	var reply ForwardLookupReply
 	err = client.Call("RPCServer.ForwardLookup", args, &reply)
 	if err != nil {
 		return err
