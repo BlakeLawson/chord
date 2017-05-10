@@ -355,7 +355,7 @@ func initializeLookupTestRing(size int) ([]*RPCServer, []*Chord, error) {
 		n := MakeNode(localhost, basePort+i)
 		tempCh := initChordFromNode(n)
 		chordInstances[i] = tempCh
-		rpcInstances[i], err = StartRPC(tempCh, sharedKV, basePort+i)
+		rpcInstances[i], err = startRPC(tempCh, sharedKV, n.String())
 		if err != nil {
 			return nil, nil, err
 		}
@@ -526,4 +526,9 @@ func TestLookup(t *testing.T) {
 	}
 	fmt.Printf("\tFinished testing %d Controlled Lookups.\n", numLookups)
 	fmt.Println(" ... Passed")
+}
+
+// code to test if chord ring / lookups are still valid
+func TestLookupAfterNodeFailures(t *testing.T) {
+
 }
