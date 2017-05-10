@@ -23,47 +23,49 @@ const testTimeout time.Duration = 30 * time.Second
 const rpcTimeout time.Duration = 10 * time.Second
 
 // Store known server IP addresses. Used by test leader to coordinate.
-var serverIPs map[string]bool = map[string]bool {
+var serverIPs = map[string]bool{
 	"127.0.0.1": true,
 }
 
 // ChordSet stores a bundle of chord information.
 type chordSet struct {
-	kvs *chordkv.KVServer
+	kvs  *chordkv.KVServer
 	rpcs *chordkv.RPCServer
 }
 
 // Hyperviser manages...
 type Hyperviser struct {
-	pass string
-	isTesting bool
-	isRunning bool
-	isLeader bool
-	leader net.IP
-	mu sync.Mutex
+	pass         string
+	isTesting    bool
+	isRunning    bool
+	isLeader     bool
+	leader       net.IP
+	mu           sync.Mutex
 	servListener net.Listener
-	ip net.IP
-	lg *log.Logger
-	chs *[]chordSet
+	ip           net.IP
+	lg           *log.Logger
+	chs          *[]chordSet
 }
 
 // TestType indicates the test that should be performed.
 // TODO: More test names...
 type TestType string
+
 const (
 	// LookupPerf measures lookup latency as function of nodes in the network.
 	LookupPerf TestType = "LookupPerf"
 )
 
 type rpcEndpoint string
+
 const (
-	addOne rpcEndpoint = "Hyperviser.AddOne"
+	addOne    rpcEndpoint = "Hyperviser.AddOne"
 	removeOne rpcEndpoint = "Hyperviser.RemoveOne"
-	test rpcEndpoint = "Hyperviser.Test"
+	test      rpcEndpoint = "Hyperviser.Test"
 	startTest rpcEndpoint = "Hyperviser.StartTest"
 	abortTest rpcEndpoint = "Hyperviser.AbortTest"
-	ready rpcEndpoint = "Hyperviser.Ready"
-	kill rpcEndpoint = "Hyperviser.Kill"
+	ready     rpcEndpoint = "Hyperviser.Ready"
+	kill      rpcEndpoint = "Hyperviser.Kill"
 )
 
 // Call the given RPC function.
@@ -118,9 +120,9 @@ func (hv *Hyperviser) RemoveOne(args *AuthArgs, reply *struct{}) error {
 
 // TestArgs used to configure information about a test.
 type TestArgs struct {
-	AA AuthArgs
-	TType TestType
-	LogName string
+	AA        AuthArgs
+	TType     TestType
+	LogName   string
 	NumChords int
 }
 
