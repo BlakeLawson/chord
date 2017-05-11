@@ -283,27 +283,27 @@ func TestChordFindClosestNodeUnit(t *testing.T) {
 
 	// Check for something on the node
 	h := ch.n.Hash - 10
-	if n := ch.FindClosestNode(h); n.Hash != ch.n.Hash {
+	if n, _ := ch.FindClosestNode(h); n.Hash != ch.n.Hash {
 		t.Fatalf("FindClosestNode failed when node stored on self.\nIncorrectly returns %v instead %v",
 			n.Hash, ch.n.Hash)
 	}
 
 	// Check for something on the successor
 	h = ch.n.Hash + 1
-	if n := ch.FindClosestNode(h); n.Hash != ch.ftable[0].Hash {
+	if n, _ := ch.FindClosestNode(h); n.Hash != ch.ftable[0].Hash {
 		t.Fatalf("FindClosestNode failed when node on successor")
 	}
 
 	// Check for something past last finger table entry
 	h = ch.ftable[len(ch.ftable)-1].Hash + 100
-	if n := ch.FindClosestNode(h); n.Hash != ch.ftable[len(ch.ftable)-1].Hash {
+	if n, _ := ch.FindClosestNode(h); n.Hash != ch.ftable[len(ch.ftable)-1].Hash {
 		t.Fatalf("FindClosestNode failed when node past last ftable entry")
 	}
 
 	// Check all other finger table entries
 	for i := 1; i < len(ch.ftable); i++ {
 		h = ch.ftable[i].Hash + 1
-		n := ch.FindClosestNode(h)
+		n, _ := ch.FindClosestNode(h)
 		if n.Hash != ch.ftable[i].Hash {
 			// Look up finger number that was given instead.
 			idx := -1
@@ -330,7 +330,7 @@ func initChordFromNode(n *Node) *Chord {
 	ch.ftable = make([]*Node, ftableSize)
 	ch.slist = make([]*Node, sListSize)
 	ch.isRunning = false
-	ch.killChan = nil
+	ch.killStabilizeChan = nil
 	ch.respChanMap = make(map[int]chan *Chord)
 	return ch
 }
@@ -513,7 +513,7 @@ func TestLookup(t *testing.T) {
 		sBuf.WriteString(ringHashesToString(ring))
 		t.Fatal(sBuf)
 	}
-	fmt.Printf("\tFinished testing %d Random Lookups.\n", numLookups)
+	fmt.Printf("\tFinished testing ring with size %d with %d Random Lookups.\n", testSize, numLookups)
 
 	fmt.Println("\tTesting Controlled Lookups")
 	err = testLookups(numLookups, ring, controlled)
@@ -524,7 +524,7 @@ func TestLookup(t *testing.T) {
 		sBuf.WriteString(ringHashesToString(ring))
 		t.Fatal(sBuf)
 	}
-	fmt.Printf("\tFinished testing %d Controlled Lookups.\n", numLookups)
+	fmt.Printf("\tFinished testing ring with size %d with %d Controlled Lookups.\n", testSize, numLookups)
 	fmt.Println(" ... Passed")
 }
 
