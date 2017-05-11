@@ -39,6 +39,7 @@ type chordSet struct {
 }
 
 type testInfo struct {
+	tNum      int
 	isTesting bool
 	isRunning bool
 	isReady   bool
@@ -52,6 +53,17 @@ type testInfo struct {
 	lgBuf     io.WriteCloser
 }
 
+// leaderFields used by leader to maintain information about the state of the
+// test it's leading.
+type leaderFields struct {
+	mu sync.Mutex
+	readyWg *sync.WaitGroup
+	doneWg *sync.WaitGroup
+	servers *map[net.IP]serverInfo
+	lg *log.Logger
+	lgBuf io.WriteCloser
+}
+
 // Hyperviser manages...
 type Hyperviser struct {
 	isRunning    bool
@@ -62,22 +74,15 @@ type Hyperviser struct {
 	servListener net.Listener
 	ti           testInfo
 	chs          *[]chordSet
+	lf *leaderFields
 }
-
-// TestType indicates the test that should be performed.
-type TestType string
-
-// TODO: More test names...
-const (
-	// LookupPerf measures lookup latency as function of nodes in the network.
-	LookupPerf TestType = "LookupPerf"
-)
 
 type rpcEndpoint string
 
 const (
-	addOne      rpcEndpoint = "Hyperviser.AddOne"
-	removeOne   rpcEndpoint = "Hyperviser.RemoveOne"
+	status      rpcEndpoint = "Hyperviser.Status"
+	addChord    rpcEndpoint = "Hyperviser.AddChord"
+	removeChord rpcEndpoint = "Hyperviser.RemoveChord"
 	prepareTest rpcEndpoint = "Hyperviser.PrepareTest"
 	startTest   rpcEndpoint = "Hyperviser.StartTest"
 	abortTest   rpcEndpoint = "Hyperviser.AbortTest"
@@ -88,7 +93,8 @@ const (
 )
 
 // Call the given RPC function.
-func callRPC(fname rpcEndpoint, ip string, pport int, args, reply *interface{}) error {
+func callRPC(fname rpcEndpoint, ip string, pport int, timeout time.Duration,
+	args, reply *interface{}) error {
 	// TODO: Use TLS
 	conn, err := net.DialTimeout("tcp", fmt.Sprintf("%s:%d", ip, pport), rpcTimeout)
 	if err != nil {
@@ -134,6 +140,10 @@ type AuthArgs struct {
 	Password string
 }
 
+func (hv *Hyperviser) makeAuthArgs() *AuthArgs {
+	return &AuthArgs{hv.ip, hv.pass}
+}
+
 // Write value to bool channel.
 func writeBool(c chan bool) {
 	c <- true
@@ -142,6 +152,9 @@ func writeBool(c chan bool) {
 // validate the IP address given to an RPC endpoint. THIS METHOD ASSUMES THAT
 // IT IS CALLED FROM A LOCKING CONTEXT.
 func (hv *Hyperviser) validate(aa *AuthArgs) error {
+	if !hv.isRunning {
+		return fmt.Errorf("Not running", hv.ip.String())
+	}
 	if _, ok := serverIPs[aa.CallerIP.String()]; !ok {
 		return fmt.Errorf("Invalid IP address")
 	}
@@ -201,7 +214,6 @@ type TestArgs struct {
 func (hv *Hyperviser) PrepareTest(args *TestArgs, reply *struct{}) error {
 	hv.mu.Lock()
 	defer hv.mu.Lock()
-
 	if err := hv.validate(args.AA); err != nil {
 		return err
 	}
@@ -210,6 +222,9 @@ func (hv *Hyperviser) PrepareTest(args *TestArgs, reply *struct{}) error {
 	}
 	if args.NumChords <= 0 {
 		return fmt.Errorf("Invalid number of Chords (%d)", args.NumChords)
+	}
+	if _, ok := tests[args.TType]; !ok {
+		return fmt.Errorf("Invalid test type: %s", args.TType)
 	}
 
 	hv.ti.isTesting = true
@@ -227,6 +242,7 @@ func (hv *Hyperviser) PrepareTest(args *TestArgs, reply *struct{}) error {
 	}
 	hv.ti.lgBuf = f
 	hv.ti.lg = log.New(f, hv.ip.String(), log.LstdFlags|log.LUTC)
+	hv.ti.TNum++
 
 	// Prepare the test.
 	go hv.initTest(args.NumChords)
@@ -250,10 +266,6 @@ func (hv *Hyperviser) stopTest(useLocks bool) {
 // Add a chord instance to hv using baseCh to initialize the new chord. THIS
 // METHOD ASSUMES THAT IT IS CALLED FROM A LOCKING CONTEXT.
 func (hv *Hyperviser) addChord(baseCh *chordkv.Chord) error {
-	if baseCh == nil {
-		return fmt.Errorf("addChord called with nil baseCh")
-	}
-
 	// Ensure everything is initialized.
 	if hv.chs == nil {
 		hv.chs = make([]chordSet, 0)
@@ -269,6 +281,7 @@ func (hv *Hyperviser) addChord(baseCh *chordkv.Chord) error {
 	}
 
 	hv.chs = append(hv.chs, chordSet{ch, kvs, rpcs})
+	time.Sleep(time.Second)
 	return nil
 }
 
@@ -292,9 +305,6 @@ func (hv *Hyperviser) initTest(numChords int) {
 			hv.stopTest(false)
 			return
 		}
-
-		// Give time to stabilize.
-		time.Sleep(500 * time.Millisecond)
 	}
 
 	hv.ti.isReady = true
@@ -304,7 +314,7 @@ func (hv *Hyperviser) initTest(numChords int) {
 	go func() {
 		args := &AuthArgs{hv.ip, hv.pass}
 		var reply struct{}
-		err := callRPC(ready, hv.ti.leader, defaultPort, args, reply)
+		err := callRPC(ready, hv.ti.leader, defaultPort, rpcTimeout, args, reply)
 		if err != nil {
 			DPrintf("hv (%s): Ready failed: %s", hv.ip.String(), err)
 		}
@@ -315,13 +325,42 @@ func (hv *Hyperviser) initTest(numChords int) {
 		select {
 		case <-time.After(readyTimeout):
 			// Clean up everything.
-			stopTest(true)
+			hv.stopTest(true)
 		case <-hv.ti.killChan:
-			stopTest(true)
+			hv.stopTest(true)
 		case <-hv.ti.readyChan:
 			// Nothing to do but exit.
 		}
 	}()
+}
+
+func (hv *Hyperviser) executeTest(tt TestType, tNum int) {
+	err := tests[tt].f(hv)
+	hv.mu.Lock()
+	if hv.ti.tNum != tNum {
+		// Test changed somehow.
+		DPrintf("hv (%s): test changed from %d -> %d during test %d",
+			hv.ip.String(), tNum, hv.ti.tNum, tNum)
+		return
+	}
+
+	ti := hv.ti
+	hv.mu.Unlock()
+
+	var reply struct{}
+	if err != nil {
+		args := FailArgs{hv.makeAuthArgs(), err}
+		err = callRPC(failed, ti.leader.String(), defaultPort, rpcTimeout, args, &reply)
+	} else {
+		args := hv.makeAuthArgs()
+		err = callRPC(done, ti.leader.String(), defaultPort, rpcTimeout, args, &reply)
+	}
+
+	if err != nil {
+		hv.ti.lg.Printf("hv (%s): executeTest: RPC failed: %s", hv.ip.String(), err)
+	}
+
+	hv.stopTest(true)
 }
 
 // StartTest serves as a synchronization barrier for tests so that the test
@@ -329,7 +368,6 @@ func (hv *Hyperviser) initTest(numChords int) {
 func (hv *Hyperviser) StartTest(args *TestArgs, reply *struct{}) error {
 	hv.mu.Lock()
 	defer hv.mu.Lock()
-
 	err := hv.validate(args.AA)
 	switch {
 	case err != nil:
@@ -349,11 +387,7 @@ func (hv *Hyperviser) StartTest(args *TestArgs, reply *struct{}) error {
 	hv.ti.readyChan <- true
 	hv.ti.isRunning = true
 
-	switch hv.ti.testType {
-	case LookupPerf:
-		go hv.lookupPerf()
-	}
-
+	go hv.executeTest(hv.ti.testType, ti.tNum)
 	return nil
 }
 
@@ -361,7 +395,7 @@ func (hv *Hyperviser) StartTest(args *TestArgs, reply *struct{}) error {
 func (hv *Hyperviser) AbortTest(args *AuthArgs, reply *struct{}) error {
 	hv.mu.Lock()
 	defer hv.mu.Unlock()
-	if err := hv.verify(args); err != nil {
+	if err := hv.validate(args); err != nil {
 		return err
 	}
 	if hv.ti.leader {
@@ -377,12 +411,21 @@ func (hv *Hyperviser) AbortTest(args *AuthArgs, reply *struct{}) error {
 	return nil
 }
 
+// RingModArgs used to change number of chord instances on a Hyperviser.
+type RingModArgs struct {
+	AA *AuthArgs
+	N  int
+}
+
 // AddOne called to have hv start a new chord instance.
-func (hv *Hyperviser) AddOne(args *AuthArgs, reply *struct{}) error {
+func (hv *Hyperviser) AddChord(args *RingModArgs, reply *struct{}) error {
 	hv.mu.Lock()
 	defer hv.mu.Unlock()
-	if err := hv.verify(args); err != nil {
+	if err := hv.validate(args.AA); err != nil {
 		return err
+	}
+	if args.N <= 0 {
+		return fmt.Errorf("N invalid: %d", args.N)
 	}
 	if !hv.ti.isTesting {
 		return fmt.Errorf("No test running")
@@ -400,15 +443,24 @@ func (hv *Hyperviser) AddOne(args *AuthArgs, reply *struct{}) error {
 		baseCh = hv.ti.baseCh
 	}
 
-	return hv.addChord(baseCh)
+	for i := 0; i < args.N; i++ {
+		if err := hv.addChord(baseCh); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 // RemoveOne called to have hv remove a chord instance.
-func (hv *Hyperviser) RemoveOne(args *AuthArgs, reply *struct{}) error {
+func (hv *Hyperviser) RemoveChord(args *RingModArgs, reply *struct{}) error {
 	hv.mu.Lock()
 	defer hv.mu.Unlock()
-	if err := hv.verify(args); err != nil {
+	if err := hv.validate(args.AA); err != nil {
 		return err
+	}
+	if args.N <= 0 {
+		return fmt.Errorf("N invalid: %d", args.N)
 	}
 	if !hv.ti.isTesting {
 		return fmt.Errorf("No test running")
@@ -420,28 +472,353 @@ func (hv *Hyperviser) RemoveOne(args *AuthArgs, reply *struct{}) error {
 		return fmt.Errorf("Cannot remove more chords")
 	}
 
-	i := len(hv.chs) - 1
-	if err := hv.chs[i].clseChord(); err != nil {
-		// TODO: if this happens, not clear how to handle state.
-		return fmt.Errof("CloseChord failed: %s", err)
+	// TODO: Better way to write this
+	for i := 0; i < args.N; i++ {
+		j := len(hv.chs) - 1
+		if j < 0 {
+			return fmt.Errorf("Cannot remove more chords: %d", i)
+		}
+
+		if err := hv.chs[j].clseChord(); err != nil {
+			// TODO: if this happens, not clear how to handle state.
+			return fmt.Errof("CloseChord failed: %s", err)
+		}
+
+		hv.chs = hv.chs[:j]
 	}
 
-	hv.chs = hv.chs[:i]
+	return nil
+}
+
+// HyperviserStatus contains basic information about the state of a Hyperviser.
+type HyperviserStatus struct {
+	IsRunning    bool
+	IsTestConfig bool
+	IsReady      bool
+	IsTesting    bool
+	IsLeader     bool
+	Leader       net.IP
+	TType        TestType
+}
+
+// Status returns the status of this hyperviser.
+func (hv *Hyperviser) Status(args *AuthArgs, reply *HyperviserStatus) error {
+	hv.mu.Lock()
+	defer hv.mu.Unlock()
+	if err := hv.validate(args); err != nil {
+		return err
+	}
+
+	reply.IsRunning = hv.isRunning
+	reply.IsTestConfig = hv.ti.isTesting
+	reply.IsReady = hv.ti.isReady
+	reply.IsTesting = hv.ti.isRunning
+	reply.IsLeader = hv.ti.isLeader
+	reply.Leader = hv.ti.leader
+	reply.TType = hv.ti.testType
+	return nil
+}
+
+// serverStatus used to track state of servers during test.
+type serverStatus string
+
+const (
+	uninitialized serverStatus = "uninitialized"
+	unresponsive  serverStatus = "unresponsive"
+	failed        serverStatus = "failed"
+	ready         serverStatus = "ready"
+	preparing     serverStatus = "preparing"
+	testing       serverStatus = "testing"
+	done          serverStatus = "done"
+)
+
+// serverInfo stores information about servers
+type serverInfo struct {
+	status       serverStatus
+	numChs       int
+	targetNumChs int
+	readyChan    chan bool
+	doneChan     chan bool
+	errChan      chan error
+}
+
+// initServers returns set of servers to use for test. Determines how many
+// chord instances each server should run. Guarantees that hv is part of the
+// set of servers.
+func (hv *Hyperviser) initServers(targetNodes int) *map[net.IP]serverInfo {
+	servers := make(map[net.IP]serverInfo)
+
+	nodesPerServer := len(serverIPs) / batchSize
+	nodesRemaining := len(serverIPs) % batchSize
+
+	servers[hv.ip] = serverInfo{
+		status: uninitialized,
+		numChs: 0,
+		targetNumChs: nodesPerServer,
+		readyChan: make(chan bool),
+		doneChan: make(chan bool),
+		errChan: make(chan error)}
+
+	var count int
+	if nodesPerServer == 0 {
+		count = nodesRemaining - 1
+	} else {
+		count = len(serverIPs) - 1
+	}
+
+	// Initialize serverInfos
+	for ip := range serverIPs {
+		if count == 0 {
+			break
+		}
+		if ip == hv.ip.String() {
+			continue
+		}
+
+		servers[net.ParseIP(ip)] = serverInfo{
+			status: uninitialized,
+			numChs: 0,
+			targetNumChs: nodesPerServer,
+			readyChan: make(chan bool),
+			doneChan: make(chan bool),
+			errChan: make(chan error)}
+		count++
+	}
+
+	// Assign remaining nodes.
+	for _, info := range servers {
+		if nodesRemaining == 0 {
+			break
+		}
+		info.targetNumChs++
+		nodesRemaining--
+	}
+
+	return servers
+}
+
+// cleanLeader resets state of leader after test execution completes. If
+// useParentLock is true, acquire hv.mu.Lock before running. Otherwise, assume
+// that lock has already been acquired.
+func (hv *Hyperviser) cleanLeader(useParentLock bool) {
+	if useParentLock {
+		hv.mu.Lock()
+		defer hv.mu.Unlock()
+	}
+
+	if hv.lf == nil {
+		return
+	}
+
+	hv.lf.mu.Lock()
+	defer hv.lf.mu.Unlock()
+
+	hv.lf.readyWg = nil
+	hv.lf.doneWg = nil
+
+	for ip, info := range hv.lf.servers {
+		if info.status != testing {
+			continue
+		}
+
+		go func(ipp net.IP) {
+			args := hv.makeAuthArgs()
+			var reply struct{}
+			err := callRPC(abortTest, ipp.String(), defaultPort, rpcTimeout, args, &reply)
+			if err != nil {
+				DPrintf("hv (%s): cleanLeader: abort %s failed: %s",
+					hv.ip.String(), ipp.String(), err)
+			}
+		}(ip)
+	}
+	hv.lf.servers = nil
+
+	if hv.lf.lg != nil {
+		hv.lf.lgBuf.Close()
+		hv.lf.lg = nil
+		hv.lf.lgBuf = nil
+	}
+}
+
+// sendLeaderReady used to send Prepare message in its own thread.
+func (hv *Hyperviser) sendPrepare(ip net.IP, info *serverInfo, logName string) {
+	args := &TestArgs{
+		AA: hv.makeAuthArgs(),
+		TType: hv.ti.testType,
+		LogName: logName,
+		NumChords: info.targetNumChs,
+		BaseChord: hv.ti.baseCh}
+	var reply struct{}
+
+	timeout := time.Duration(info.targetNumChs) * time.Second + 5
+	err := callRPC(prepareTest, ip.String(), defaultPort, timeout, args, &reply)
+
+	hv.mu.Lock()
+	hv.lf.mu.Lock()
+	if err != nil {
+		hv.lf.lg.Printf("sendPrepare: RPC to %s failed: %s",
+			hv.ip.String(), ip.String(), err)
+		info.status = unresponsive
+	} else {
+		info.status = preparing
+	}
+	hv.lf.mu.Unlock()
+	hv.mu.Unlock()
+}
+
+// prepareLeader used to initialize leader in goroutine.
+func (hv *Hyperviser) prepareLeader() {
+	hv.mu.Lock()
+	defer hv.mu.Unlock()
+
+	for i := 1; i < hv.lf.servers[hv.ip].targetNumChs; i++ {
+		if err := hv.addChord(hv.ti.baseCh); err != nil {
+			hv.lf.lg.Printf("prepareLeader: initChord failed: %s", err)
+			return
+		}
+	}
+
+	hv.lf.readyWg.Done()
+}
+
+// StartLeader runs the given test as the leader.
+func (hv *Hyperviser) StartLeader(testType TestType, leaderLog, testLog string) error {
+	hv.mu.Lock()
+	if !hv.isrunning {
+		hv.mu.Unlock()
+		return fmt.Errorf("Not running")
+	}
+	if hv.ti.isTesting {
+		hv.mu.Unlock()
+		return fmt.Errorf("Already testing")
+	}
+	if _, ok := tests[testType]; !ok {
+		hv.mu.Unlock()
+		return fmt.Errorf("Invalid test type: %s", testType)
+	}
+
+	// Initialize leader state
+	hv.ti.isTesting = true
+	hv.ti.isLeader = true
+	hv.ti.killChan = make(chan bool)
+	hv.ti.readyChan = make(chan bool)
+	hv.ti.testType = testType
+
+	// It is safe to unlock here because RPC calls use isLeader and isReady to
+	// determine whether to run.
+	hv.mu.Unlock()
+	defer hv.stopTest(true)
+
+	hv.lf = &leaderFields{}
+	defer hv.cleanLeader(true)
+
+	// Set up log files.
+	f, err := os.Create(hv.logDir + leaderLog)
+	if err != nil {
+		return fmt.Errorf("Creating leader log failed: %s", err)
+	}
+	hv.lf.lgBuf = f
+	hv.lf.lg = log.New(f, hv.ip.String(), log.LstdFlags|log.LUTC)
+
+	f, err = os.Create(hv.logDir + testLog)
+	if err != nil {
+		return fmt.Errorf("Creating test log failed: %s", err)
+	}
+	hv.ti.lgBuf = f
+	hv.ti.lg = log.New(f, hv.ip.String(), log.LstdFlags|log.LUTC)
+
+	// Run the test
+	// TODO: new log names for each batch
+	for batchNum, batchSize := range tests[testType].phases {
+		hv.lf.lg.Printf("Starting %s round %d", testType, batchNum)
+		hv.ti.servers = initServers(batchSize)
+
+		// Initialize leader's chords
+		if err := hv.addChord(nil); err != nil {
+			return fmt.Errorf("First chord initialization failed: %s", err)
+		}
+		hv.ti.baseCh = hv.chs[0].ch
+		servers[hv.ip].numChs = 1
+
+		// Prepare test on followers and leader
+		hv.fl.lg.Println("Preparing for test")
+		hv.lf.readyWg = &sync.WaitGroup{}
+		for ip, info := range hv.ti.servers {
+			hv.lf.readyWg.Add(1)
+			if ip.Equal(hv.ip) {
+				continue
+			}
+			go hv.sendPrepare(ip, info, testLog)
+		}
+		go hv.prepareLeader()
+
+		// Gather responses
+		hv.lf.lg.Println("Waiting for ready")
+		readyChan := make(chan bool)
+		go func() {
+			hv.readyWg.Wait()
+			readyChan <- true
+		}()
+
+		select {
+		case <-time.After(readyTimeout):
+			hv.lf.lg.Println("Timeout before servers ready")
+			return
+		case <-readyChan:
+			// Nothing to do but move on.
+		}
+
+		// Run test
+		hv.lf.lg.Println("Executing test")
+
+		// TODO: here
+	}
+
 	return nil
 }
 
 // Ready called by test followers when they are ready to begin the test.
 func (hv *Hyperviser) Ready(args *AuthArgs, reply *struct{}) error {
+	hv.mu.Lock()
+	defer hv.mu.Unlock()
+
+	if err := hv.validate(args); err != nil {
+		return err
+	}
+	if !hv.ti.isLeader {
+		return fmt.Errorf("Not leader")
+	}
+
+	hv.lf.mu.Lock()
+	defer hv.lf.mu.Unlock()
+
+	if _, ok := hv.lf.servers[args.CallerIP]; !ok {
+		return fmt.Errorf("Not part of test")
+	}
+	if hv.lf.servers[args.CallerIP].status != preparing {
+		return fmt.Errorf("Called at wrong time")
+	}
+
+	hv.lf.servers[args.CallerIP].status = ready
+	hv.lf.doneWg.Done()
 	return nil
 }
 
 // Done called by test followers when they are done running their test.
 func (hv *Hyperviser) Done(args *AuthArgs, reply *struct{}) error {
+	// TODO: here
 	return nil
 }
 
+// FailArgs contains reason why test failed.
+type FailArgs struct {
+	AA     *AuthArgs
+	Reason error
+}
+
 // Failed called by test followers if their test failed for some reason.
-func (hv *Hyperviser) Failed(args *AuthArgs, reply *struct{}) error {
+func (hv *Hyperviser) Failed(args *FailArgs, reply *struct{}) error {
+	// TODO: here
 	return nil
 }
 
@@ -492,6 +869,10 @@ func (hv *Hyperviser) Kill(args *AuthArgs, reply *struct{}) error {
 		return nil
 	}
 
+	if hv.ti.isLeader {
+		hv.cleanLeader(false)
+	}
+
 	if hv.ti.isTesting {
 		hv.stopTest(false)
 	}
@@ -502,8 +883,38 @@ func (hv *Hyperviser) Kill(args *AuthArgs, reply *struct{}) error {
 
 // TESTS ...
 
+// TestType indicates the test that should be performed.
+type TestType string
+
+// TODO: More test names...
+const (
+	// LookupPerf measures lookup latency as function of nodes in the network.
+	LookupPerf TestType = "LookupPerf"
+	HelloWorld TestType = "HelloWorld"
+)
+
+type testInfo struct {
+	phases []int
+	f      func(*hyperviser.Hyperviser) error
+}
+
+var tests = map[TestType]testInfo{
+	LookupPerf: testInfo{
+		phases: []int{10, 30, 60, 90, 120, 150, 180, 200},
+		f:      lookupPerf},
+	HelloWorld: testInfo{
+		phases: []int{1, 20},
+		f:      helloWorld},
+}
+
 // lookupPerf measures lookup latency as a function of number of nodes in the
 // chord ring.
-func (hv *Hyperviser) lookupPerf() {
+func lookupPerf(hv *Hyperviser) error {
 
+}
+
+// helloWorld used to test the hyperviser framework. Plz work
+func helloWorld(hv *Hyperviser) error {
+	hv.ti.lg.Println("Hello World")
+	return nil
 }
