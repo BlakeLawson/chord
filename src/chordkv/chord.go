@@ -75,15 +75,14 @@ func (ch *Chord) recursiveLookup(h UHash) (*Chord, error) {
 	var err error
 	wg.Add(1)
 
-	go func(pwg *sync.WaitGroup, pErr *error) {
+	go func(pwg *sync.WaitGroup) {
 		defer pwg.Done()
-		*pErr = ch.ForwardLookup(h, ch, rID)
-		// if lookup fails, send nil chord into chan.
-		if *pErr != nil {
-			log.Fatal((*pErr).Error())
+		err = ch.ForwardLookup(h, ch, rID)
+		if err != nil {
+			DPrintf("chord [%016x]: forward lookup failed: %s", ch.n.Hash, err)
 			respChan <- nil
 		}
-	}(&wg, &err)
+	}(&wg)
 
 	// wait for result and then delete channel
 	chRes := <-respChan

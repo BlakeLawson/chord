@@ -25,6 +25,18 @@ func MakeNode(addr net.IP, port int) *Node {
 	return n
 }
 
+// String returns string representation of n.
 func (n *Node) String() string {
 	return fmt.Sprintf("%s:%d", n.Addr.String(), n.Port)
+}
+
+// Equal returns true if nodes n and m are the same. Return false otherwise.
+func (n *Node) Equal(m *Node) bool {
+	if n == nil && m == nil {
+		return true
+	}
+	if n == nil || m == nil {
+		return false
+	}
+	return n.Addr.Equal(m.Addr) && n.Port == m.Port
 }

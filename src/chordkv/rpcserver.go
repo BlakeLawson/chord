@@ -275,8 +275,8 @@ func startRPC(ch *Chord, kv *KVServer, addr string) (*RPCServer, error) {
 	return rpcs, nil
 }
 
-// Block until server stops.
-func (rpcs *RPCServer) wait() error {
+// Wait blocks until server stops.
+func (rpcs *RPCServer) Wait() error {
 	if !rpcs.isRunning() {
 		return nil
 	}
@@ -285,7 +285,7 @@ func (rpcs *RPCServer) wait() error {
 }
 
 // End the server if it is running. Returns nil on success.
-func (rpcs *RPCServer) end() error {
+func (rpcs *RPCServer) End() error {
 	if !rpcs.isRunning() {
 		return nil
 	}

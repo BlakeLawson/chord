@@ -44,8 +44,7 @@ func (n *Node) RemotePut(key string, val string) error {
 
 	args := &KVPutArgs{key, val}
 	var reply KVPutReply
-	err = client.Call("RPCServer.KVPut", args, &reply)
-	return err
+	return client.Call("RPCServer.KVPut", args, &reply)
 }
 
 // RemoteLookup performs Lookup RPC on remote node.
