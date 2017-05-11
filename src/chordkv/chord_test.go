@@ -77,7 +77,7 @@ func initializeChordRing(size int) error {
 	}
 
 	// End chord instance before server.
-	defer rpcInstances[0].end()
+	defer rpcInstances[0].End()
 	defer chordInstances[0].Kill()
 
 	DPrintf("Initialized chord[%s] (%016x)", chordInstances[0].n.String(),
@@ -98,7 +98,7 @@ func initializeChordRing(size int) error {
 		}
 
 		// End chord instance before server
-		defer rpcInstances[i].end()
+		defer rpcInstances[i].End()
 		defer chordInstances[i].Kill()
 		DPrintf("Initialized chord[%s] (%016x)", chordInstances[i].n.String(),
 			chordInstances[i].n.Hash)
@@ -494,7 +494,7 @@ func TestLookup(t *testing.T) {
 
 	// Make sure servers are disabled
 	for _, rpcs := range rpcss {
-		defer rpcs.end()
+		defer rpcs.End()
 	}
 
 	fmt.Println("\tChord Ring Initialized")
