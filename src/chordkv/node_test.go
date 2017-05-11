@@ -37,4 +37,9 @@ func TestNode(t *testing.T) {
 	if m.Hash != n.Hash {
 		t.Fatalf("Nodes hashed to different values")
 	}
+
+	// Check Equal
+	if !n.Equal(m) {
+		t.Fatalf("Node equality failed")
+	}
 }
