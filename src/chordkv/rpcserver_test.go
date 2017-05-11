@@ -24,7 +24,7 @@ func TestRPCServerInitialization(t *testing.T) {
 		t.Fatalf("Server initilization failed: %s", err)
 	}
 	go func() {
-		if err := rpcs.Wait(); err != nil {
+		if err := rpcs.wait(); err != nil {
 			t.Fatalf("Server failed: %s", err)
 		}
 		serverDone <- true
@@ -35,7 +35,7 @@ func TestRPCServerInitialization(t *testing.T) {
 
 	// Turn off server.
 	fmt.Println("closing server")
-	if err := rpcs.End(); err != nil {
+	if err := rpcs.end(); err != nil {
 		t.Fatalf("Error stopping server: %s", err)
 	}
 
@@ -65,7 +65,7 @@ func TestRPCServerBasicRequest(t *testing.T) {
 	}
 
 	go func() {
-		if err := rpcs.Wait(); err != nil {
+		if err := rpcs.wait(); err != nil {
 			t.Fatalf("Server failed: %s", err)
 		}
 		serverDone <- true
@@ -81,7 +81,7 @@ func TestRPCServerBasicRequest(t *testing.T) {
 	}
 
 	// Stop the server.
-	if err := rpcs.End(); err != nil {
+	if err := rpcs.end(); err != nil {
 		t.Fatalf("Error stopping server: %s", err)
 	}
 
@@ -117,7 +117,7 @@ func TestRPCServerMultiple(t *testing.T) {
 			t.Fatalf("server%d failed to start: %s", i, err)
 		}
 		go func(j int) {
-			if err := rpcss[j].Wait(); err != nil {
+			if err := rpcss[j].wait(); err != nil {
 				t.Fatalf("server%d failed: %s", j, err)
 			}
 			serverDones[j] <- true
@@ -138,7 +138,7 @@ func TestRPCServerMultiple(t *testing.T) {
 
 	// Turn off the servers
 	for i := 0; i < N; i++ {
-		if err := rpcss[i].End(); err != nil {
+		if err := rpcss[i].end(); err != nil {
 			t.Fatalf("server%d end failed: %s", i, err)
 		}
 	}
