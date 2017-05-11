@@ -14,10 +14,11 @@ import (
 
 const (
 	// TODO: revisit these numbers
-	isIterative      bool          = true
-	sListSize        int           = 10
-	ftableSize       int           = 64
-	stabilizeTimeout time.Duration = 250 * time.Millisecond
+	isIterative        bool          = true
+	sListSize          int           = 10
+	ftableSize         int           = 64
+	stabilizeTimeout   time.Duration = 250 * time.Millisecond
+	updateSlistTimeout time.Duration = 250 * time.Millisecond
 )
 
 // Chord represents single Chord instance.
@@ -39,8 +40,9 @@ type Chord struct {
 	// successor list
 	slist []*Node
 
-	// Used to terminate instance's background threads.
-	killChan chan bool
+	// Channels used to terminate instance's background threads.
+	killStabilizeChan   chan bool
+	killUpdateSlistChan chan bool
 
 	// Tracks number of requests to generate unique IDs for respChanMap.
 	reqCount int
@@ -112,7 +114,10 @@ func (ch *Chord) ForwardLookup(h UHash, source *Chord, rID int) error {
 	}
 
 	// looks up the node closest to h on ch's fingertable and forwards lookup to it
-	dest := ch.FindClosestNode(h)
+	dest, err := ch.FindClosestNode(h)
+	if err != nil {
+		return err
+	}
 	ch.mu.Unlock()
 	return dest.RemoteForwardLookup(h, source, rID)
 }
@@ -132,7 +137,10 @@ func (ch *Chord) receiveLookUpResult(result *Chord, rID int) error {
 // iterativeLookup iteratively looks up the node responsible for identifier h
 func (ch *Chord) iterativeLookup(h UHash) (*Chord, error) {
 	ch.mu.Lock()
-	closest := ch.FindClosestNode(h)
+	closest, err := ch.FindClosestNode(h)
+	if err != nil {
+		return nil, err
+	}
 	if ch.n.Hash == closest.Hash {
 		ch.mu.Unlock()
 		return ch, nil
@@ -153,28 +161,66 @@ func (ch *Chord) iterativeLookup(h UHash) (*Chord, error) {
 }
 
 // FindClosestNode is a helper function for lookups. It returns the closest
-// node to the identifier h given this node's fingertable. THIS METHOD ASSUMES
-// THAT IT IS CALLED FROM A LOCKING CONTEXT.
-func (ch *Chord) FindClosestNode(h UHash) *Node {
+// node to the identifier h given this node's fingertable or an error if every node
+// it know before h has failed
+// THIS METHOD ASSUMES THAT IT IS CALLED FROM A LOCKING CONTEXT.
+// IT WOULD BE UNWISE TO CALL LOOKUP IN THIS METHOD EVEN FOR FAULT TOLERANCE
+func (ch *Chord) FindClosestNode(h UHash) (*Node, error) {
 	// If I am closest, return myself
 	if inRange(h, ch.predecessor.Hash, ch.n.Hash) {
-		return ch.n
+		return ch.n, nil
 	}
 
 	if inRange(h, ch.n.Hash, ch.ftable[0].Hash) {
-		return ch.ftable[0]
+		return ch.ftable[0], nil
 	}
 
 	// for all nodes, check if key h falls in range,
+	trySuccessors := false
 	for i := 0; i < ftableSize-1; i++ {
 		node := ch.ftable[i]
+		// if key falls in range
 		if inRange(h, node.Hash, ch.ftable[i+1].Hash) {
-			return node
+			// ping node to see if it is alive
+			err := node.RemotePing()
+			// if no error return node
+			if err == nil {
+				return node, nil
+			}
+			// if there is an error. Two possibilities.
+			// return node before failed node
+			// if all these nodes fail or it was your successor that failed go to successor list
+			for j := i - 1; j >= 0; j-- {
+				tempNode := ch.ftable[j]
+				err := tempNode.RemotePing()
+				if err == nil {
+					return tempNode, nil
+				}
+			}
+			trySuccessors = true
 		}
+
 	}
 
-	// if not found in finger table, return last node in ftable.
-	return ch.ftable[ftableSize-1]
+	// try all appropriate successors to handle node failutes
+	if trySuccessors {
+		prev := ch.n
+		for _, successor := range ch.slist {
+			if inRange(h, prev.Hash, successor.Hash) {
+				err := successor.RemotePing()
+				if err == nil {
+					return successor, nil
+				}
+			}
+			prev = successor
+		}
+
+		return nil, fmt.Errorf("All nodes that [%v] knows that could lead to %v have failed", ch.n.Hash, h)
+	}
+
+	// if not found near any node in finger table, return last node in ftable.
+	// the lookup is in another area of they ring entirely
+	return ch.ftable[ftableSize-1], nil
 }
 
 // Lookup node responsible for key. Returns the node and its predecessor.
@@ -228,7 +274,7 @@ func (ch *Chord) Stabilize() {
 
 	for {
 		select {
-		case <-ch.killChan:
+		case <-ch.killStabilizeChan:
 			return
 		case <-t.C:
 			// Verify successor pointer up to date and update finger table.
@@ -239,9 +285,12 @@ func (ch *Chord) Stabilize() {
 				if !ch.checkRunning() {
 					return
 				}
+				// If successor is dead, call (check and) updateSuccessor
 				if err != nil {
-					DPrintf("chord [%s]: successor lookup failed: %s\n",
-						ch.n.String(), err)
+					err = ch.updateSuccessor()
+					if err != nil {
+						DPrintf("ch.stabilize [%s]: checkSuccessor failed: %s\n", ch.n.String(), err)
+					}
 				} else {
 					ch.mu.Lock()
 					if inRange(pSucc.Hash, ch.n.Hash, ch.ftable[0].Hash) {
@@ -272,6 +321,72 @@ func (ch *Chord) Stabilize() {
 			}()
 		}
 	}
+}
+
+// updateSuccessorlist periodicaly updates successor list to ensure it is correct
+// given that we should know our immediate successor via stabilize
+func (ch *Chord) updateSuccessorlist() {
+	t := time.NewTicker(updateSlistTimeout)
+	defer t.Stop()
+
+	for {
+		select {
+		case <-ch.killUpdateSlistChan:
+			return
+		case <-t.C:
+			// TODO: why extra goroutine?
+			go func() {
+				ch.mu.Lock()
+				ch.slist[0] = ch.ftable[0]
+				succ := ch.slist[0]
+				ch.mu.Unlock()
+
+				// check if successor is alive, if not, update it in slist and ftable
+				err := ch.updateSuccessor()
+				if err != nil {
+					DPrintf("ch.stabilize [%s]: checkSuccessor failed: %s\n", ch.n.String(), err)
+				}
+
+				if !ch.checkRunning() {
+					return
+				}
+
+				// update the rest of the successor list
+				for i := 1; i < sListSize; i++ {
+					nextSucc, err := succ.RemoteGetSucc()
+					// if this fails, lookupUp the would be nextSucc of succ
+					if err != nil {
+						nextSuccCh, err := ch.n.RemoteLookup((succ.Hash + 1) % MaxUHash)
+
+						// if RemoteLookup fails, handle silently by printing; successor is previous successor
+						if err != nil {
+							DPrintf("ch.updateSuccessorlist [%s]: RemoteLookup(%s) failed: %s\n", ch.n.String(),
+								(succ.Hash+1)%MaxUHash)
+							nextSucc = ch.slist[i-1]
+						} else {
+							nextSucc = nextSuccCh.n
+						}
+						// update successor list
+						ch.mu.Lock()
+						ch.slist[i] = nextSucc
+						succ = ch.slist[i]
+						ch.mu.Unlock()
+
+					} else {
+						// normal case
+						ch.mu.Lock()
+						ch.slist[i] = nextSucc
+						succ = nextSucc
+						ch.mu.Unlock()
+					}
+					if !ch.checkRunning() {
+						return
+					}
+				}
+			}()
+		}
+	}
+
 }
 
 // KeyRange returns start and end of key range this chord instance is
@@ -343,6 +458,27 @@ func (ch *Chord) findPredecessor(h UHash) (*Node, error) {
 	return successor.predecessor, nil
 }
 
+// updateSuccessor updates the successor in ftable and slist if dead.
+// If it can't find the successor, it returns an error.
+func (ch *Chord) updateSuccessor() error {
+	err := ch.ftable[0].RemotePing()
+	if err != nil {
+		// lookup successor, notify it that this is its prdecessor
+		// if this fails, fail silently and print
+		hash := (ch.n.Hash + 1) % MaxUHash
+		succCh, err := ch.n.RemoteLookup(hash)
+		if err != nil {
+			return err
+		}
+		ch.mu.Lock()
+		ch.slist[0] = succCh.n
+		ch.ftable[0] = succCh.n
+		ch.mu.Unlock()
+		succCh.n.RemoteNotify(ch.n)
+	}
+	return nil
+}
+
 // priorFtableOwner returns the UHash of a node that may have ch in its ftable
 // at entry i.
 func (ch *Chord) priorFtableOwner(i int) UHash {
@@ -399,7 +535,8 @@ func MakeChord(self *Node, existingNode *Node) (*Chord, error) {
 	ch.isRunning = true
 	ch.ftable = make([]*Node, ftableSize)
 	ch.slist = make([]*Node, sListSize)
-	ch.killChan = make(chan bool)
+	ch.killStabilizeChan = make(chan bool)
+	ch.killUpdateSlistChan = make(chan bool)
 	ch.respChanMap = make(map[int]chan *Chord)
 
 	// Initialize slist and ftable
@@ -445,6 +582,7 @@ func MakeChord(self *Node, existingNode *Node) (*Chord, error) {
 
 	// Start Stabilize thread in the background.
 	go ch.Stabilize()
+	go ch.updateSuccessorlist()
 	return ch, nil
 }
 
@@ -462,7 +600,8 @@ func (ch *Chord) Kill() {
 	if ch.isRunning {
 		ch.isRunning = false
 		ch.mu.Unlock()
-		ch.killChan <- true
+		ch.killStabilizeChan <- true
+		ch.killUpdateSlistChan <- true
 	} else {
 		ch.mu.Unlock()
 	}
