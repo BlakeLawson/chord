@@ -88,6 +88,23 @@ func (rpcs *RPCServer) GetPred(args *GetPredArgs, reply *GetPredReply) error {
 	return nil
 }
 
+// GetSuccArgs holds arguments for GetSucc.
+type GetSuccArgs interface{}
+
+// GetSuccReply holds reply to GetSucc.
+type GetSuccReply struct {
+	N Node
+}
+
+// GetSucc returns the Successor of the Chord instance on this server.
+// LOCKS
+func (rpcs *RPCServer) GetSucc(args *GetSuccArgs, reply *GetSuccReply) error {
+	rpcs.mu.Lock()
+	reply.N = *rpcs.ch.ftable[0]
+	rpcs.mu.Unlock()
+	return nil
+}
+
 // FindClosestArgs holds arguments for FindClosestNode.
 type FindClosestArgs struct {
 	H UHash
@@ -105,8 +122,12 @@ func (rpcs *RPCServer) FindClosestNode(args *FindClosestArgs, reply *FindClosest
 
 	// TODO: Not happy about doing locking here
 	rpcs.ch.mu.Lock()
-	reply.N = *rpcs.ch.FindClosestNode(args.H)
+	tempN, err := rpcs.ch.FindClosestNode(args.H)
 	rpcs.ch.mu.Unlock()
+	if err != nil {
+		return err
+	}
+	reply.N = *tempN
 	if rpcs.ch.n.Hash == reply.N.Hash {
 		reply.ChFields = serializeChord(rpcs.ch)
 	}

@@ -83,6 +83,24 @@ func (n *Node) RemoteGetPred() (*Node, error) {
 	return &reply.N, nil
 }
 
+// RemoteGetSucc returns the successor of the specified node.
+// THE SERVER LOCKS THE CHORD MUTEX TO ACCESS THE SUCCESSOR
+func (n *Node) RemoteGetSucc() (*Node, error) {
+	client, err := n.openConn()
+	if err != nil {
+		return nil, err
+	}
+	defer client.Close()
+
+	args := new(GetSuccArgs)
+	var reply GetSuccReply
+	err = client.Call("RPCServer.GetSucc", args, &reply)
+	if err != nil {
+		return nil, err
+	}
+	return &reply.N, nil
+}
+
 // RemoteFindClosestNode find the closest node from n to hash identifier h.
 // Returns the closest known Node and the Chord instance for that node if the
 // Node is the actual Node that is responsible for h. If the returned Node is
