@@ -187,9 +187,8 @@ func (ch *Chord) FindClosestNode(h UHash) (*Node, error) {
 			if err == nil {
 				return node, nil
 			}
-			// if there is an error. Two possibilities.
-			// return node before failed node
-			// if all these nodes fail or it was your successor that failed go to successor list
+			// if there is an error, either return the node immediately before failed node or
+			// if all these nodes fail or it was just successor that failed go to successor list
 			for j := i - 1; j >= 0; j-- {
 				tempNode := ch.ftable[j]
 				err := tempNode.RemotePing()
@@ -324,7 +323,7 @@ func (ch *Chord) Stabilize() {
 }
 
 // updateSuccessorlist periodicaly updates successor list to ensure it is correct
-// given that we should know our immediate successor via stabilize
+// given that we should know our immediate successor via stabilize also calls fixFingers
 func (ch *Chord) updateSuccessorlist() {
 	t := time.NewTicker(updateSlistTimeout)
 	defer t.Stop()
@@ -382,6 +381,7 @@ func (ch *Chord) updateSuccessorlist() {
 					if !ch.checkRunning() {
 						return
 					}
+					ch.fixFingers()
 				}
 			}()
 		}
