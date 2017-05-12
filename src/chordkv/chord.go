@@ -160,8 +160,8 @@ func (ch *Chord) iterativeLookup(h UHash) (*Chord, error) {
 }
 
 // FindClosestNode is a helper function for lookups. It returns the closest
-// node to the identifier h given this node's fingertable or an error if every node
-// it know before h has failed
+// node to the identifier h given this node's fingertable, even if it has failed
+// Returns an error if every node it knows close to the identifier h has failed
 // THIS METHOD ASSUMES THAT IT IS CALLED FROM A LOCKING CONTEXT.
 // IT WOULD BE UNWISE TO CALL LOOKUP IN THIS METHOD EVEN FOR FAULT TOLERANCE
 func (ch *Chord) FindClosestNode(h UHash) (*Node, error) {
@@ -175,6 +175,7 @@ func (ch *Chord) FindClosestNode(h UHash) (*Node, error) {
 	}
 
 	// for all nodes, check if key h falls in range,
+	var failedNode *Node
 	trySuccessors := false
 	for i := 0; i < ftableSize-1; i++ {
 		node := ch.ftable[i]
@@ -186,6 +187,7 @@ func (ch *Chord) FindClosestNode(h UHash) (*Node, error) {
 			if err == nil {
 				return node, nil
 			}
+			failedNode = node
 			// if there is an error, either return the node immediately before failed node or
 			// if all these nodes fail or it was just successor that failed go to successor list
 			for j := i - 1; j >= 0; j-- {
@@ -213,7 +215,7 @@ func (ch *Chord) FindClosestNode(h UHash) (*Node, error) {
 			prev = successor
 		}
 
-		return nil, fmt.Errorf("All nodes that [%v] knows that could lead to %v have failed", ch.n.Hash, h)
+		return failedNode, fmt.Errorf("All nodes that [%v] knows that could lead to %v have failed", ch.n.Hash, h)
 	}
 
 	// if not found near any node in finger table, return last node in ftable.
