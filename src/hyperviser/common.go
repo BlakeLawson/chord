@@ -1,6 +1,6 @@
 // Blake Lawson (blawson@princeton.edu) and Oluwatosin Adewale (oadewale@princeton.edu)
 
-package chordkv
+package hyperviser
 
 import (
 	"fmt"

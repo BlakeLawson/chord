@@ -528,6 +528,11 @@ func (ch *Chord) updateOthers() {
 	wg.Wait()
 }
 
+// GetNode returns ch's network information.
+func (ch *Chord) GetNode() Node {
+	return *ch.n
+}
+
 // MakeChord creates object and join the Chord ring. If existingNode is null,
 // then this Chord node is first.
 func MakeChord(self *Node, existingNode *Node) (*Chord, error) {
