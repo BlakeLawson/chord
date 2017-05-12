@@ -29,6 +29,7 @@ const rpcTimeout time.Duration = 10 * time.Second
 // TODO: Update when we have real servers.
 var serverIPs = map[string]bool{
 	"127.0.0.1": true,
+	"::":        true,
 }
 
 // ChordSet stores a bundle of chord information.
@@ -80,7 +81,7 @@ type Hyperviser struct {
 type rpcEndpoint string
 
 const (
-	getStatus      rpcEndpoint = "Hyperviser.GetStatus"
+	getStatus   rpcEndpoint = "Hyperviser.GetStatus"
 	addChord    rpcEndpoint = "Hyperviser.AddChord"
 	removeChord rpcEndpoint = "Hyperviser.RemoveChord"
 	prepareTest rpcEndpoint = "Hyperviser.PrepareTest"
@@ -406,7 +407,7 @@ func (hv *Hyperviser) AbortTest(args *AuthArgs, reply *struct{}) error {
 	if err := hv.validate(args); err != nil {
 		return err
 	}
-	if hv.ti.leader {
+	if hv.ti.isLeader {
 		return fmt.Errorf("Can't call AbortTest on leader")
 	}
 	if !hv.ti.isTesting {
