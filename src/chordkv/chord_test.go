@@ -5,7 +5,6 @@ package chordkv
 import (
 	"bytes"
 	"fmt"
-	"log"
 	"math"
 	"math/rand"
 	"net"
@@ -207,12 +206,7 @@ func makeSimpleChord() *Chord {
 	ch.n = MakeNode(localhost, 8888)
 	ch.predecessor = &Node{localhost, 0, ch.n.Hash - 1000}
 	ch.ftable = make([]*Node, ftableSize)
-	ch.slist = make([]*Node, sListSize)
-
 	// Initialize lists
-	for i := 0; i < len(ch.slist); i++ {
-		ch.slist[i] = &Node{localhost, 0, ch.n.Hash + UHash(i)}
-	}
 	for i := 0; i < len(ch.ftable); i++ {
 		ch.ftable[i] = &Node{localhost, 0, ch.ftableStart(i)}
 	}
@@ -284,27 +278,27 @@ func TestChordFindClosestNodeUnit(t *testing.T) {
 
 	// Check for something on the node
 	h := ch.n.Hash - 10
-	if n, _ := ch.FindClosestNode(h); n.Hash != ch.n.Hash {
+	if n := ch.FindClosestNode(h); n.Hash != ch.n.Hash {
 		t.Fatalf("FindClosestNode failed when node stored on self.\nIncorrectly returns %v instead %v",
 			n.Hash, ch.n.Hash)
 	}
 
 	// Check for something on the successor
 	h = ch.n.Hash + 1
-	if n, _ := ch.FindClosestNode(h); n.Hash != ch.ftable[0].Hash {
+	if n := ch.FindClosestNode(h); n.Hash != ch.ftable[0].Hash {
 		t.Fatalf("FindClosestNode failed when node on successor")
 	}
 
 	// Check for something past last finger table entry
 	h = ch.ftable[len(ch.ftable)-1].Hash + 100
-	if n, _ := ch.FindClosestNode(h); n.Hash != ch.ftable[len(ch.ftable)-1].Hash {
+	if n := ch.FindClosestNode(h); n.Hash != ch.ftable[len(ch.ftable)-1].Hash {
 		t.Fatalf("FindClosestNode failed when node past last ftable entry")
 	}
 
 	// Check all other finger table entries
 	for i := 1; i < len(ch.ftable); i++ {
 		h = ch.ftable[i].Hash + 1
-		n, _ := ch.FindClosestNode(h)
+		n := ch.FindClosestNode(h)
 		if n.Hash != ch.ftable[i].Hash {
 			// Look up finger number that was given instead.
 			idx := -1
@@ -329,7 +323,6 @@ func initChordFromNode(n *Node) *Chord {
 	ch := &Chord{}
 	ch.n = n
 	ch.ftable = make([]*Node, ftableSize)
-	ch.slist = make([]*Node, sListSize)
 	ch.isRunning = false
 	ch.killStabilizeChan = nil
 	ch.respChanMap = make(map[int]chan *Chord)
@@ -371,13 +364,6 @@ func initializeLookupTestRing(size int) ([]*RPCServer, []*Chord, error) {
 	for i, chInst := range chordInstances {
 		// initialize predecessor
 		chInst.predecessor = chordInstances[posMod(i-1, size)].n
-
-		// initialize successors
-		// TODO: what if size / num chordInstances is less than successor list size
-		for j := 0; j < sListSize; j++ {
-			chInst.slist[j] = chordInstances[(i+j+1)%size].n
-		}
-
 		// initialize fingertables
 		for j := range chInst.ftable {
 			idx := findKeyOwner(&chordInstances, chInst.ftableStart(j))
@@ -521,238 +507,5 @@ func TestLookup(t *testing.T) {
 			numLookups, err.Error(), ringHashesToString(ring))
 	}
 	fmt.Printf("\tFinished testing ring with size %d with %d Controlled Lookups.\n", testSize, numLookups)
-	fmt.Println(" ... Passed")
-}
-
-// initialize a chord ring of desired size normally, fail some percentage of
-// nodes and return all live nodes
-func initializeRingWithFailures(size int, failureRate float64, basePort int) ([]*RPCServer, []*Chord, error) {
-	if size <= 0 {
-		return nil, nil,
-			fmt.Errorf("initializeChordRingWithFailure called with invalid size %d. Should be greater than 0", size)
-	}
-	if failureRate > 1 || failureRate < 0 {
-		return nil, nil,
-			fmt.Errorf("initializeChordRingWithFailure called with invalid failure rate %f. Should be at most 1 and at least 0", failureRate)
-	}
-
-	var err error
-	localhost := net.ParseIP("127.0.0.1")
-	sharedKV := &KVServer{}
-	rpcInstances := make([]*RPCServer, size)
-	chordInstances := make([]*Chord, size)
-
-	// First node
-	n := MakeNode(localhost, basePort)
-	chordInstances[0], err = MakeChord(n, nil)
-	if err != nil {
-		return nil, nil, fmt.Errorf("Chord[0] initialization failed: %s", err)
-	}
-
-	rpcInstances[0], err = startRPC(chordInstances[0], sharedKV, n.String())
-	if err != nil {
-		chordInstances[0].Kill()
-		return nil, nil, fmt.Errorf("RPCServer[0] initialization failed: %s", err)
-	}
-
-	DPrintf("Initialized chord[%s] (%016x)", chordInstances[0].n.String(),
-		chordInstances[0].n.Hash)
-
-	// Initialization phase.
-	for i := 1; i < size; i++ {
-		n = MakeNode(localhost, basePort+i)
-		chordInstances[i], err = MakeChord(n, chordInstances[0].n)
-		if err != nil {
-			shutdownInstances(rpcInstances[0:i], chordInstances[0:i])
-			return nil, nil, fmt.Errorf("Chord[%d] initiailzation failed: %s", i, err)
-		}
-
-		rpcInstances[i], err = startRPC(chordInstances[i], sharedKV, n.String())
-		if err != nil {
-			chordInstances[i].Kill()
-			shutdownInstances(rpcInstances[0:i], chordInstances[0:i])
-			return nil, nil, fmt.Errorf("RPCServer[%d] initialization failed: %s", i, err)
-		}
-
-		DPrintf("Initialized chord[%s] (%016x)", chordInstances[i].n.String(),
-			chordInstances[i].n.Hash)
-
-		// Give time to stabilize
-		time.Sleep(2 * stabilizeTimeout)
-	}
-
-	// choose sizeAlive number of chord instances and their servers, kill the rest
-	sizeAlive := int((1 - failureRate) * float64(size))
-	log.Printf("SizeAlive is %d", sizeAlive)
-	liverpcInstances := make([]*RPCServer, sizeAlive)
-	livechordInstances := make([]*Chord, sizeAlive)
-	for idx, randIdx := range rand.Perm(size) {
-		// if you haven't gotten sizeAlive nodes, add to list
-		if idx < sizeAlive {
-			livechordInstances[idx] = chordInstances[randIdx]
-			liverpcInstances[idx] = rpcInstances[randIdx]
-			log.Printf("[%d]:Saving %d", idx, randIdx)
-		} else {
-			// kill the remaining chordInstances and their servers
-			chordInstances[randIdx].Kill()
-			err := rpcInstances[randIdx].End()
-			if err != nil {
-				log.Printf("ERROR %s", err.Error())
-			}
-			log.Printf("[%d]:killing %d - chord[0x%016x]", idx, randIdx, rpcInstances[randIdx].ch.n.Hash)
-		}
-	}
-	// sort original instances to print out
-	// CAREFUL, do not sort before you kill
-	ns := &nodeSorter{&chordInstances}
-	sort.Sort(ns)
-	log.Printf("Ring:\n%s\n", ringHashesToString(chordInstances))
-
-	chordInstances = livechordInstances
-	rpcInstances = liverpcInstances
-
-	// CRUCIAL: wait for system to stabilize and detect dead nodes
-	duration := time.Second * 15
-	log.Printf("Waiting for system to stabilize for %v seconds", duration)
-	time.Sleep(duration)
-
-	log.Printf("System Stabilized after killing %d nodes", size-sizeAlive)
-	// Validation phase.
-	ns = &nodeSorter{&chordInstances}
-	sort.Sort(ns)
-	for i := 0; i < sizeAlive; i++ {
-		// Check successor pointers
-		if chordInstances[i].ftable[0].Hash != chordInstances[(i+1)%sizeAlive].n.Hash {
-			log.Print(ringHashesToString(chordInstances))
-			log.Printf("Chord [0x%016x] successor 0x%016x", chordInstances[i].n.Hash, chordInstances[i].ftable[0].Hash)
-			return nil, nil, fmt.Errorf("Chord[%d] successor invalid", i)
-		}
-
-		// Check predecessor pointers
-		idx := i - 1
-		if i == 0 {
-			idx = sizeAlive - 1
-		}
-		if chordInstances[i].predecessor.Hash != chordInstances[idx].n.Hash {
-			log.Print(ringHashesToString(chordInstances))
-			log.Printf("Chord [0x%016x] predecessor 0x%016x", chordInstances[i].n.Hash, chordInstances[i].predecessor.Hash)
-			return nil, nil, fmt.Errorf("Chord[%d] predecessor invalid", i)
-		}
-
-		// remove finger table checks
-		// TODO: Add more invariant checks
-	}
-	return rpcInstances, chordInstances, nil
-}
-
-// iterate through the slices of servers and chord instances and shut them down
-func shutdownInstances(RPCServers []*RPCServer, ring []*Chord) {
-	for _, server := range RPCServers {
-		server.End()
-	}
-	for _, chordInst := range ring {
-		chordInst.Kill()
-	}
-}
-
-// test Initialization and Lookup failures, given test parameters
-func testInitializationLookupFailures(testSize int, failureRate float64, numLookups, basePort int, t *testing.T) {
-	lookupType := "Iterative"
-	if !isIterative {
-		lookupType = "Recursive"
-	}
-
-	fmt.Printf("\tTest: Chord %d initializations %.2f%% failure rate ...\n", testSize, failureRate*100)
-
-	servers, ring, err := initializeRingWithFailures(testSize, failureRate, basePort)
-
-	if err != nil {
-		t.Fatalf("Chord initialization with %.2f%% failure rate unsuccessful: %s", failureRate*100, err)
-	}
-
-	fmt.Println("\tChord Ring Initialized")
-
-	fmt.Printf("\tTesting Random %s Lookups after failures\n", lookupType)
-	err = testLookups(numLookups, ring, random)
-	if err != nil {
-		t.Fatalf("\tRandom Lookups Test failed for %d random lookups with error\n\t%s\n%s",
-			numLookups, err.Error(), ringHashesToString(ring))
-	}
-	fmt.Printf("\tFinished testing ring with size %d with %d Random Lookups.\n", testSize, numLookups)
-
-	fmt.Printf("\tTesting %s Controlled Lookups after failutes\n", lookupType)
-	err = testLookups(numLookups, ring, controlled)
-	if err != nil {
-		t.Fatalf("\tControlled lookups Test failed for %d random lookups with error\n\t%s\n%s",
-			numLookups, err.Error(), ringHashesToString(ring))
-	}
-	fmt.Printf("\tFinished testing ring with size %d with %d Controlled Lookups.\n", testSize, numLookups)
-
-	fmt.Println("\t ... Passed")
-	shutdownInstances(servers, ring)
-}
-
-// code to test if chord ring / lookups are still valid
-func TestInitializationLookupFailures(t *testing.T) {
-	testSize := 7
-	failureRate := 0.00
-	numLookups := 100
-	fmt.Println("Testing Chord Initialization and Lookups with varying failure rates")
-	testInitializationLookupFailures(testSize, failureRate, numLookups, 8888, t)
-	fmt.Println(" ... Passed")
-
-	failureRate = 0.10
-	fmt.Println("Testing Chord Initialization and Lookups with varying failure rates")
-	testInitializationLookupFailures(testSize, failureRate, numLookups, 8888, t)
-	fmt.Println(" ... Passed")
-
-	failureRate = 0.25
-	fmt.Println("Testing Chord Initialization and Lookups with varying failure rates")
-	testInitializationLookupFailures(testSize, failureRate, numLookups, 8888, t)
-	fmt.Println(" ... Passed")
-
-	failureRate = 0.50
-	fmt.Println("Testing Chord Initialization and Lookups with varying failure rates")
-	testInitializationLookupFailures(testSize, failureRate, numLookups, 8888, t)
-	fmt.Println(" ... Passed")
-}
-
-// code to test if chord ring / lookups are still valid
-func TestInitializationLookupFivePercentFailures(t *testing.T) {
-	testSize := 10
-	failureRate := 0.05
-	numLookups := 100
-	fmt.Printf("Testing Chord Initialization and Lookups with 5%% failure rates\n")
-	testInitializationLookupFailures(testSize, failureRate, numLookups, 8888, t)
-	fmt.Println(" ... Passed")
-}
-
-// code to test if chord ring / lookups are still valid
-func TestInitializationLookupTenPercentFailures(t *testing.T) {
-	testSize := 5
-	failureRate := 0.10
-	numLookups := 100
-	fmt.Printf("Testing Chord Initialization and Lookups with 10%% failure rates\n")
-	testInitializationLookupFailures(testSize, failureRate, numLookups, 8888, t)
-	fmt.Println(" ... Passed")
-}
-
-// code to test if chord ring / lookups are still valid
-func TestInitializationLookupTwentyFivePercentFailures(t *testing.T) {
-	testSize := 6
-	failureRate := 0.25
-	numLookups := 100
-	fmt.Printf("Testing Chord Initialization and Lookups with 25%% failure rates\n")
-	testInitializationLookupFailures(testSize, failureRate, numLookups, 8888, t)
-	fmt.Println(" ... Passed")
-}
-
-// code to test if chord ring / lookups are still valid
-func TestInitializationLookupFiftyPercentFailures(t *testing.T) {
-	testSize := 6
-	failureRate := 0.50
-	numLookups := 100
-	fmt.Printf("Testing Chord Initialization and Lookups with 50%% failure rates\n")
-	testInitializationLookupFailures(testSize, failureRate, numLookups, 8888, t)
 	fmt.Println(" ... Passed")
 }

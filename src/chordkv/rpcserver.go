@@ -122,11 +122,8 @@ func (rpcs *RPCServer) FindClosestNode(args *FindClosestArgs, reply *FindClosest
 
 	// TODO: Not happy about doing locking here
 	rpcs.ch.mu.Lock()
-	tempN, err := rpcs.ch.FindClosestNode(args.H)
+	tempN := rpcs.ch.FindClosestNode(args.H)
 	rpcs.ch.mu.Unlock()
-	if err != nil {
-		return err
-	}
 	reply.N = *tempN
 	if rpcs.ch.n.Hash == reply.N.Hash {
 		reply.ChFields = serializeChord(rpcs.ch)
@@ -140,7 +137,6 @@ type ChordFields struct {
 	N           *Node
 	Predecessor *Node
 	FTable      []*Node
-	SList       []*Node
 }
 
 func serializeChord(ch *Chord) *ChordFields {
@@ -148,7 +144,7 @@ func serializeChord(ch *Chord) *ChordFields {
 		N:           ch.n,
 		Predecessor: ch.predecessor,
 		FTable:      ch.ftable,
-		SList:       ch.slist}
+	}
 }
 
 func deserializeChord(chFields *ChordFields) *Chord {
@@ -159,7 +155,7 @@ func deserializeChord(chFields *ChordFields) *Chord {
 		n:           chFields.N,
 		predecessor: chFields.Predecessor,
 		ftable:      chFields.FTable,
-		slist:       chFields.SList}
+	}
 }
 
 // GetChordFieldsArgs is an empty interface
