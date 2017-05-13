@@ -21,6 +21,9 @@ const (
 )
 
 // TODO: handling failures not necessarily because node fails but maybe due to network error
+// Also make code less error prone by changing position of similar variables (e.g. rId and hops)
+// in function heading to make it less likely for them to be swappped
+
 // Chord represents single Chord instance.
 type Chord struct {
 	mu sync.Mutex
@@ -162,8 +165,8 @@ func (ch *Chord) iterativeLookup(h UHash) (*Chord, int, error) {
 			return nil, 0, fmt.Errorf("chord [%s]: RemoteFindClosestNode on %016x failed: %s",
 				ch.n.String(), h, err)
 		}
+		hops++
 		if rCh != nil {
-			hops++
 			return rCh, hops, nil
 		}
 	}

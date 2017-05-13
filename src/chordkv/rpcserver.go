@@ -42,13 +42,27 @@ type KVPutArgs struct {
 	Val string
 }
 
-// KVPutReply is a placeholder for KVPut RPC's return values since KVPut only
+// KVPutReply is a placeholder for KVPut RPC's reply  since KVPut only
 // needs to return an error.
 type KVPutReply interface{}
 
 // KVPut performs put on KVServer running on this RPCServer.
 func (rpcs *RPCServer) KVPut(args *KVPutArgs, reply *KVPutReply) error {
 	rpcs.kv.Put(args.Key, args.Val)
+	return nil
+}
+
+// KVSizeArgs is a placeholder for KVSize RPC's args
+type KVSizeArgs interface{}
+
+// KVSizeReply holds reply to KVSize RPC.
+type KVSizeReply struct {
+	Size int
+}
+
+// KVSize returns result of StateSize on KVServer running on this RPCServer.
+func (rpcs *RPCServer) KVSize(args *KVSizeArgs, reply *KVSizeReply) error {
+	reply.Size = rpcs.kv.StateSize()
 	return nil
 }
 

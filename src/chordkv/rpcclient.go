@@ -52,6 +52,23 @@ func (n *Node) RemotePut(key string, val string) error {
 	return client.Call("RPCServer.KVPut", args, &reply)
 }
 
+// RemoteKVSize performs Size RPC on KVServer of remote node
+func (n *Node) RemoteKVSize() (int, error) {
+	client, err := n.openConn()
+	if err != nil {
+		return 0, err
+	}
+	defer client.Close()
+
+	var args KVSizeArgs
+	reply := KVSizeReply{}
+	err = client.Call("RPCServer.KVSize", &args, &reply)
+	if err != nil {
+		return 0, err
+	}
+	return reply.Size, nil
+}
+
 // RemoteLookup performs Lookup RPC on remote node.
 func (n *Node) RemoteLookup(h UHash) (*Chord, *LookupInfo, error) {
 	client, err := n.openConn()

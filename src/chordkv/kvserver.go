@@ -31,6 +31,14 @@ func (kvs *KVServer) Put(key string, val string) {
 	kvs.state[key] = val
 }
 
+// StateSize returns the number of key-value mappings
+func (kvs *KVServer) StateSize() int {
+	kvs.mu.Lock()
+	defer kvs.mu.Unlock()
+
+	return len(kvs.state)
+}
+
 // MakeKVServer creates new KVServer instance.
 func MakeKVServer(ch *Chord) *KVServer {
 	return &KVServer{

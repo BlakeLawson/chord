@@ -500,7 +500,7 @@ func TestLookup(t *testing.T) {
 	}
 
 	fmt.Printf("Test: Chord %s Lookup tests ...", lookupType)
-	testSize := 100
+	testSize := 200
 	numLookups := 20
 
 	var err error
