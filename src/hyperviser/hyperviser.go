@@ -280,7 +280,7 @@ func (hv *Hyperviser) addChord(baseCh *chordkv.Chord) error {
 		return fmt.Errorf("StartRPC failed: %s", err)
 	}
 
-	hv.chs = append(hv.chs, chordSet{ch, kvs, rpcs})
+	hv.chs = appEnd(hv.chs, chordSet{ch, kvs, rpcs})
 	time.Sleep(time.Second)
 	return nil
 }
