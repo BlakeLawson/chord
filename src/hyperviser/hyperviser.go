@@ -59,13 +59,6 @@ func (ap *AddrPair) Validate() error {
 // TODO: Update when we have real servers.
 var serverAddrs = map[AddrPair]bool{}
 
-// ChordSet stores a bundle of chord information.
-type chordSet struct {
-	ch   *chordkv.Chord
-	kvs  *chordkv.KVServer
-	rpcs *chordkv.RPCServer
-}
-
 type testInfo struct {
 	tNum      int
 	isTesting bool
@@ -101,7 +94,7 @@ type Hyperviser struct {
 	ap           AddrPair
 	servListener net.Listener
 	ti           testInfo
-	chs          *[]*chordSet
+	chkvs        *[]*chordkv.ChordKV
 	ls           *leaderState
 }
 
@@ -207,40 +200,30 @@ func (hv *Hyperviser) validate(aa *AuthArgs) error {
 	return nil
 }
 
-// Shut down single chord instance. THIS METHOD ASSUMES THAT IT IS CALLED FROM
-// A LOCKING CONTEXT.
-func (chs *chordSet) closeChord() error {
-	if chs.ch == nil {
-		return fmt.Errorf("nil chord")
-	}
-	chs.ch.Kill()
-	return chs.rpcs.End()
-}
-
 // Shut down all of the chord instances associated with the current test. THiS
 // METHOD ASSUMES THAT IT IS CALLED FROM A LOCKING CONTEXT.
 func (hv *Hyperviser) closeChords() {
-	if hv.chs == nil {
+	if hv.chkvs == nil {
 		return
 	}
 
 	wg := &sync.WaitGroup{}
-	for i := 0; i < len(*hv.chs); i++ {
-		if (*hv.chs)[i] == nil {
+	for i := 0; i < len(*hv.chkvs); i++ {
+		if (*hv.chkvs)[i] == nil {
 			continue
 		}
 
 		wg.Add(1)
-		go func(chs *chordSet) {
+		go func(chkv *chordkv.ChordKV) {
 			defer wg.Done()
-			if err := chs.closeChord(); err != nil {
+			if err := chkv.Kill(); err != nil {
 				DPrintf("hv (%s): error closing chord: %s", hv.ap.String(), err)
 			}
-		}((*hv.chs)[i])
+		}((*hv.chkvs)[i])
 	}
 
 	wg.Wait()
-	hv.chs = nil
+	hv.chkvs = nil
 }
 
 // TestArgs used to configure information about a test.
@@ -358,51 +341,56 @@ func (hv *Hyperviser) addChordBase(baseChNode *chordkv.Node) error {
 	}
 
 	// Ensure everything is initialized.
-	if hv.chs == nil {
-		hv.chs = new([]*chordSet)
+	if hv.chkvs == nil {
+		hv.chkvs = new([]*chordkv.ChordKV)
 	}
 
-	p, err := port.New()
+	chkv, err := chordkv.MakeChordKV(baseChNode)
 	if err != nil {
-		return fmt.Errorf("port.New failed: %s", err)
+		return err
 	}
 
-	// Try three times
-	var ch *chordkv.Chord
-	for i := 0; i < 3; i++ {
-		DPrintf("hv (%s): addchord: MakeNode(%s, %d)", hv.ap.String(), hv.ap.IP, p)
-		n := chordkv.MakeNode(net.ParseIP(hv.ap.IP), p)
-		DPrintf("hv (%s): addChord: Calling MakeChord %s", hv.ap.String(), n.String())
-		ch, err = chordkv.MakeChord(n, baseChNode)
-		if err == nil {
-			break
-		}
-		DPrintf("hv (%s): addChord: makeChord failed: %s", hv.ap.String(), err)
+	// p, err := port.New()
+	// if err != nil {
+	// 	return fmt.Errorf("port.New failed: %s", err)
+	// }
 
-		// Use a random port because port.New() is kind of trash.
-		var err1 error
-		p, err1 = pickRandomPort()
-		if err1 != nil {
-			return err1
-		}
-	}
-	if err != nil {
-		return fmt.Errorf("MakeChord failed 3 times: %s", err)
-	}
+	// // Try three times
+	// var ch *chordkv.Chord
+	// for i := 0; i < 3; i++ {
+	// 	DPrintf("hv (%s): addchord: MakeNode(%s, %d)", hv.ap.String(), hv.ap.IP, p)
+	// 	n := chordkv.MakeNode(net.ParseIP(hv.ap.IP), p)
+	// 	DPrintf("hv (%s): addChord: Calling MakeChord %s", hv.ap.String(), n.String())
+	// 	ch, err = chordkv.MakeChord(n, baseChNode)
+	// 	if err == nil {
+	// 		break
+	// 	}
+	// 	DPrintf("hv (%s): addChord: makeChord failed: %s", hv.ap.String(), err)
 
-	kvs := chordkv.MakeKVServer(ch)
-	rpcs, err := chordkv.StartRPC(ch, kvs, p)
-	if err != nil {
-		ch.Kill()
-		return fmt.Errorf("StartRPC failed: %s", err)
-	}
+	// 	// Use a random port because port.New() is kind of trash.
+	// 	var err1 error
+	// 	p, err1 = pickRandomPort()
+	// 	if err1 != nil {
+	// 		return err1
+	// 	}
+	// }
+	// if err != nil {
+	// 	return fmt.Errorf("MakeChord failed 3 times: %s", err)
+	// }
 
-	if ch == nil {
-		CPrintf(White, "hv (%s):%s addChordBase:%s nil chord", hv.ap.String(), Red, Blue)
-	}
-	*hv.chs = append(*hv.chs, &chordSet{ch, kvs, rpcs})
+	// kvs := chordkv.MakeKVServer(ch)
+	// rpcs, err := chordkv.StartRPC(ch, kvs, p)
+	// if err != nil {
+	// 	ch.Kill()
+	// 	return fmt.Errorf("StartRPC failed: %s", err)
+	// }
 
-	n := ch.GetNode()
+	// if ch == nil {
+	// 	CPrintf(White, "hv (%s):%s addChordBase:%s nil chord", hv.ap.String(), Red, Blue)
+	// }
+	*hv.chkvs = append(*hv.chkvs, chkv)
+
+	n := chkv.Ch.GetNode()
 	CPrintf(Yellow, "hv (%s): addChordBase: created chord %s [%016x]",
 		hv.ap.String(), n.String(), n.Hash)
 	time.Sleep(time.Second)
@@ -420,7 +408,7 @@ func (hv *Hyperviser) initTest(numChords int) {
 		hv.ti.clear()
 		return
 	}
-	if hv.chs != nil {
+	if hv.chkvs != nil {
 		DPrintf("hv (%s): initTest: chord instances already exist", hv.ap.String())
 	}
 
@@ -573,8 +561,8 @@ func (hv *Hyperviser) AddChord(args *RingModArgs, reply *struct{}) error {
 	// Only use hv.ti.baseCh if it's the only option to avoid unnecessary load
 	// on the leader hyperviser.
 	var baseChNode *chordkv.Node
-	if len(*hv.chs) > 0 {
-		n := (*hv.chs)[0].ch.GetNode()
+	if len(*hv.chkvs) > 0 {
+		n := (*hv.chkvs)[0].Ch.GetNode()
 		baseChNode = &n
 	} else {
 		baseChNode = hv.ti.baseCh
@@ -605,23 +593,23 @@ func (hv *Hyperviser) RemoveChord(args *RingModArgs, reply *struct{}) error {
 	if !hv.ti.isReady {
 		return fmt.Errorf("Not ready")
 	}
-	if hv.chs == nil || len(*hv.chs) == 0 {
+	if hv.chkvs == nil || len(*hv.chkvs) == 0 {
 		return fmt.Errorf("Cannot remove more chords")
 	}
 
 	// TODO: Better way to write this
 	for i := 0; i < args.N; i++ {
-		j := len(*hv.chs) - 1
+		j := len(*hv.chkvs) - 1
 		if j < 0 {
 			return fmt.Errorf("Cannot remove more chords: %d", i)
 		}
 
-		if err := (*hv.chs)[j].closeChord(); err != nil {
+		if err := (*hv.chkvs)[j].Kill(); err != nil {
 			// TODO: if this happens, not clear how to handle state.
 			return fmt.Errorf("CloseChord failed: %s", err)
 		}
 
-		*hv.chs = (*hv.chs)[:j]
+		*hv.chkvs = (*hv.chkvs)[:j]
 	}
 
 	return nil
@@ -918,7 +906,7 @@ func (hv *Hyperviser) StartLeader(testType TestType, leaderLog, testLog string) 
 			return fmt.Errorf("First chord initialization failed: %s", err)
 		}
 
-		n := (*hv.chs)[0].ch.GetNode()
+		n := (*hv.chkvs)[0].Ch.GetNode()
 		hv.ti.baseCh = &n
 		CPrintf(White, "hv (%s): baseChord: %s", hv.ap.String(), hv.ti.baseCh.String())
 
@@ -1180,6 +1168,7 @@ func (hv *Hyperviser) Stop(useLocks bool) {
 	}
 
 	hv.servListener.Close()
+	hv.isRunning = false
 }
 
 // Kill shuts down the Hyperviser.

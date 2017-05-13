@@ -292,3 +292,8 @@ func (rpcs *RPCServer) End() error {
 
 	return nil
 }
+
+// GetAddr returns the address the servers is listening on.
+func (rpcs *RPCServer) GetAddr() net.Addr {
+	return rpcs.servListener.Addr()
+}
