@@ -60,17 +60,19 @@ type ChordLookupArgs struct {
 // ChordLookupReply holds reply to ChordLookup RPC.
 type ChordLookupReply struct {
 	ChFields ChordFields
+	Info     LookupInfo
 }
 
 // ChordLookup returns result of lookup performed by the Chord instance running
 // on this RPCServer.
 func (rpcs *RPCServer) ChordLookup(args *ChordLookupArgs, reply *ChordLookupReply) error {
-	rCh, err := rpcs.ch.Lookup(args.H)
+	rCh, info, err := rpcs.ch.Lookup(args.H)
 	if err != nil {
 		return err
 	}
 
 	reply.ChFields = *serializeChord(rCh)
+	reply.Info = *info
 	return nil
 }
 
@@ -174,6 +176,7 @@ func (rpcs *RPCServer) GetChordFields(args *GetChordFieldsArgs, reply *GetChordF
 type ForwardLookupArgs struct {
 	H        UHash
 	RID      int
+	Hops     int
 	ChFields ChordFields
 }
 
@@ -183,7 +186,7 @@ type ForwardLookupReply interface{}
 // ForwardLookup finds the closest node to a hash from the Chord instance on this server.
 func (rpcs *RPCServer) ForwardLookup(args *ForwardLookupArgs, reply *ForwardLookupReply) error {
 	source := deserializeChord(&args.ChFields)
-	return rpcs.ch.ForwardLookup(args.H, source, args.RID)
+	return rpcs.ch.ForwardLookup(args.H, source, args.RID, args.Hops)
 }
 
 // ChordNotify calls notify on local chord instance.
@@ -206,6 +209,7 @@ func (rpcs *RPCServer) isRunning() bool {
 // LookupResultArgs holds result of lookup
 type LookupResultArgs struct {
 	RID      int
+	Hops     int
 	ChFields ChordFields
 }
 
@@ -215,7 +219,7 @@ type LookupResultReply interface{}
 // ReceiveLookupResult receives the result of a recursive lookup
 func (rpcs *RPCServer) ReceiveLookupResult(args *LookupResultArgs, reply *LookupResultReply) error {
 	result := deserializeChord(&args.ChFields)
-	return rpcs.ch.receiveLookUpResult(result, args.RID)
+	return rpcs.ch.receiveLookUpResult(result, args.RID, args.Hops)
 }
 
 // UpdateFtableArgs are arguments to UpdateFtable.

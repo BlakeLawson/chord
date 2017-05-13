@@ -325,7 +325,7 @@ func initChordFromNode(n *Node) *Chord {
 	ch.ftable = make([]*Node, ftableSize)
 	ch.isRunning = false
 	ch.killStabilizeChan = nil
-	ch.respChanMap = make(map[int]chan *Chord)
+	ch.respChanMap = make(map[int]chan *LookupResult)
 	return ch
 }
 
@@ -380,18 +380,37 @@ const (
 	random     testType = false
 )
 
+type LookupStats struct {
+	totalLatency time.Duration
+	aveLatency   time.Duration
+	totalHops    int
+	aveHops      float64
+	numLookups   int
+}
+
+func printStats(stats *LookupStats) {
+	fmt.Printf("\n\nLookup Statistics\n")
+	fmt.Printf("\tNumber of Lookups:\n\t%d\n", stats.numLookups)
+	fmt.Printf("\tTotal Number of Hops:\n\t%d\n", stats.totalHops)
+	fmt.Printf("\tTotal Latency:\n\t%v\n", stats.totalLatency)
+	fmt.Printf("\tAverage Number of Hops:\n\t%0.2f\n", stats.aveHops)
+	fmt.Printf("\tAverage Latency:\n\t%v\n", stats.aveLatency)
+	fmt.Printf("\n")
+}
+
 // Tests the chord ring on keys starting from random nodes trials number of
 // times. Can test on totally random keys or keys whose successor is a desired
 // node. It is assumed that chord ring is a sorted list of chord instances.
 // Returns an error if less than 100% of the lookups pass.
-func testLookups(numLookups int, chordInstances []*Chord, tType testType) error {
+func testLookups(numLookups int, chordInstances []*Chord, tType testType) (*LookupStats, error) {
 	if numLookups <= 0 {
-		return fmt.Errorf("numLookups parameter invalid: %d", numLookups)
+		return nil, fmt.Errorf("numLookups parameter invalid: %d", numLookups)
 	}
 	if chordInstances == nil {
-		return fmt.Errorf("chordInstances parameter invalid")
+		return nil, fmt.Errorf("chordInstances parameter invalid")
 	}
 
+	stats := &LookupStats{}
 	var r = rand.New(rand.NewSource(time.Now().UnixNano()))
 	var ringSize = len(chordInstances)
 	numCorrect := 0
@@ -419,15 +438,15 @@ func testLookups(numLookups int, chordInstances []*Chord, tType testType) error 
 		tempCh := chordInstances[idx]
 
 		// Lookup the key
-		resultCh, err := tempCh.Lookup(key)
+		resultCh, info, err := tempCh.Lookup(key)
 		if err != nil {
-			return err
+			return nil, err
 		}
 
 		// Find correct result
 		correctCh := chordInstances[findKeyOwner(&chordInstances, key)]
 		if tType == controlled && correctCh.n.Hash != targetNodeHash {
-			return fmt.Errorf("Test's correct answer computed incorrectly.")
+			return nil, fmt.Errorf("Test's correct answer computed incorrectly.")
 		}
 
 		// match, increment number of correct lookups
@@ -437,21 +456,30 @@ func testLookups(numLookups int, chordInstances []*Chord, tType testType) error 
 				DPrintf("ftable[%02d]: 0x%016x", i, a.Hash)
 			}
 			DPrintf("Failed on trial %d", numCorrect)
-			return fmt.Errorf("Chord[0x%016x].Lookup(0x%016x) failed. Expected: "+
+			return nil, fmt.Errorf("Chord[0x%016x].Lookup(0x%016x) failed. Expected: "+
 				"0x%016x; Received: 0x%016x\n",
 				tempCh.n.Hash, key, correctCh.n.Hash, resultCh.n.Hash)
 		}
 
+		fmt.Printf("\n[%d]: Lookup on Node[0x%016x]. Result[0x%016x]. Hops[%d]. Latency[%v]\n",
+			i, tempCh.n.Hash, resultCh.n.Hash, info.Hops, info.Latency)
+
+		stats.totalHops += info.Hops
+		stats.totalLatency += info.Latency
 		numCorrect++
 	}
 
 	// if any lookups were unsuccessful, return an error
 	if numCorrect != numLookups {
-		return fmt.Errorf("Lookup Test Failed. Accuracy %v%%",
+		return nil, fmt.Errorf("Lookup Test Failed. Accuracy %v%%",
 			float32(numCorrect)/float32(numLookups))
 	}
 
-	return nil
+	stats.numLookups = numLookups
+	stats.aveHops = float64(stats.totalHops) / float64(numLookups)
+	stats.aveLatency = stats.totalLatency / time.Duration(numLookups)
+
+	return stats, nil
 }
 
 func ringHashesToString(chordInstances []*Chord) string {
@@ -473,7 +501,7 @@ func TestLookup(t *testing.T) {
 
 	fmt.Printf("Test: Chord %s Lookup tests ...", lookupType)
 	testSize := 100
-	numLookups := 1000
+	numLookups := 20
 
 	var err error
 	rpcss, ring, err := initializeLookupTestRing(testSize)
@@ -493,19 +521,22 @@ func TestLookup(t *testing.T) {
 	fmt.Println("\tChord Ring Initialized")
 
 	fmt.Println("\tTesting Random Lookups")
-	err = testLookups(numLookups, ring, random)
+	stats, err := testLookups(numLookups, ring, random)
 	if err != nil {
 		t.Fatalf("\tRandom Lookups Test failed for %d random lookups with error\n\t%s\n%s",
 			numLookups, err.Error(), ringHashesToString(ring))
 	}
 	fmt.Printf("\tFinished testing ring with size %d with %d Random Lookups.\n", testSize, numLookups)
+	printStats(stats)
 
 	fmt.Println("\tTesting Controlled Lookups")
-	err = testLookups(numLookups, ring, controlled)
+	stats, err = testLookups(numLookups, ring, controlled)
 	if err != nil {
 		t.Fatalf("\tControlled lookups Test failed for %d random lookups with error\n\t%s\n%s",
 			numLookups, err.Error(), ringHashesToString(ring))
 	}
 	fmt.Printf("\tFinished testing ring with size %d with %d Controlled Lookups.\n", testSize, numLookups)
+	printStats(stats)
+
 	fmt.Println(" ... Passed")
 }
