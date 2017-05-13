@@ -612,7 +612,7 @@ func initializeRingWithFailures(size int, failureRate float64, basePort int) ([]
 	rpcInstances = liverpcInstances
 
 	// CRUCIAL: wait for system to stabilize and detect dead nodes
-	duration := time.Second * 10
+	duration := time.Second * 15
 	log.Printf("Waiting for system to stabilize for %v seconds", duration)
 	time.Sleep(duration)
 
@@ -639,30 +639,7 @@ func initializeRingWithFailures(size int, failureRate float64, basePort int) ([]
 			return nil, nil, fmt.Errorf("Chord[%d] predecessor invalid", i)
 		}
 
-		/* A node cannot check that their finger table is wrong till they communicate with it
-		// Check finger table
-		for j := 1; j < len(chordInstances[i].ftable); j++ {
-			expectedIdx := findKeyOwner(&chordInstances, chordInstances[i].ftableStart(j))
-			if chordInstances[i].ftable[j].Hash != chordInstances[expectedIdx].n.Hash {
-				ch := chordInstances[i]
-				chHash := ch.n.Hash
-				DPrintf("Chord[%016x].ftable:", chHash)
-				for k, n := range ch.ftable {
-					DPrintf("ftable[%02d]: %016x", k, n.Hash)
-				}
-				CPrintf(White, "Chord[%016x] ftable entry %d incorrect", chHash, j)
-				CPrintf(White, "Expected ch[%016x].ftable[%02d] = %016x", chHash, j, chordInstances[expectedIdx].n.Hash)
-				CPrintf(White, "Actual   ch[%016x].ftable[%02d] = %016x", chHash, j, ch.ftable[j].Hash)
-				chString := ""
-				for _, ch := range chordInstances {
-					chString += fmt.Sprintf("%016x ", ch.n.Hash)
-				}
-				DPrintf("Set of chords: [ %s]", chString)
-				return nil, nil, fmt.Errorf("Chord[%d] ftable entry %d incorrect", i, j)
-			}
-		}
-		*/
-
+		// remove finger table checks
 		// TODO: Add more invariant checks
 	}
 	return rpcInstances, chordInstances, nil
@@ -752,7 +729,7 @@ func TestInitializationLookupFivePercentFailures(t *testing.T) {
 
 // code to test if chord ring / lookups are still valid
 func TestInitializationLookupTenPercentFailures(t *testing.T) {
-	testSize := 6
+	testSize := 5
 	failureRate := 0.10
 	numLookups := 100
 	fmt.Printf("Testing Chord Initialization and Lookups with 10%% failure rates\n")

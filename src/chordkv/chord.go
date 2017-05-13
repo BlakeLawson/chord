@@ -347,7 +347,6 @@ func (ch *Chord) updateSuccessorlist() {
 		case <-ch.killUpdateSlistChan:
 			return
 		case <-t.C:
-			// TODO: why extra goroutine?
 			go func() {
 				ch.mu.Lock()
 				ch.slist[0] = ch.ftable[0]
@@ -489,7 +488,6 @@ func (ch *Chord) updateSuccessor() error {
 			ch.mu.Unlock()
 			err = succ.RemotePing()
 			if err == nil {
-				//log.Printf("\tchord [0x%016x] Successor is now [0x%016x]", ch.n.Hash, succ.Hash)
 				break
 			}
 		}
@@ -499,7 +497,6 @@ func (ch *Chord) updateSuccessor() error {
 		ch.mu.Unlock()
 		succ.RemoteNotify(ch.n)
 	}
-	//log.Printf("\tchord [0x%016x] Successor [0x%016x] alive", ch.n.Hash, ch.ftable[0].Hash)
 	return nil
 }
 
@@ -609,7 +606,7 @@ func MakeChord(self *Node, existingNode *Node) (*Chord, error) {
 		}
 	}
 
-	// Start Stabilize thread in the background.
+	// Start Stabilize and updateSuccessorlist thread in the background.
 	go ch.Stabilize()
 	go ch.updateSuccessorlist()
 	return ch, nil
