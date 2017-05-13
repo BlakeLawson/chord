@@ -14,7 +14,7 @@ import (
 
 const (
 	// TODO: revisit these numbers
-	isIterative      bool          = true
+	isIterative      bool          = false
 	sListSize        int           = 10
 	ftableSize       int           = 64
 	stabilizeTimeout time.Duration = 250 * time.Millisecond
@@ -129,7 +129,7 @@ func (ch *Chord) ForwardLookup(h UHash, source *Chord, rID, hops int) error {
 }
 
 // ReceiveLookUpResult receives lookup result and passes it to the respChanMap
-func (ch *Chord) receiveLookUpResult(result *Chord, hops, rID int) error {
+func (ch *Chord) receiveLookUpResult(result *Chord, rID, hops int) error {
 	ch.mu.Lock()
 	lookupChan, ok := ch.respChanMap[rID]
 	ch.mu.Unlock()
