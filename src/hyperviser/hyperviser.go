@@ -210,6 +210,9 @@ func (hv *Hyperviser) validate(aa *AuthArgs) error {
 // Shut down single chord instance. THIS METHOD ASSUMES THAT IT IS CALLED FROM
 // A LOCKING CONTEXT.
 func (chs *chordSet) closeChord() error {
+	if chs.ch == nil {
+		return fmt.Errorf("nil chord")
+	}
 	chs.ch.Kill()
 	return chs.rpcs.End()
 }
@@ -348,7 +351,11 @@ func (hv *Hyperviser) addChord(baseChNode *chordkv.Node) error {
 // Add a chord instance to hv using baseCh to initialize the new chord. THIS
 // METHOD ASSUMES THAT IT IS CALLED FROM A LOCKING CONTEXT.
 func (hv *Hyperviser) addChordBase(baseChNode *chordkv.Node) error {
-	DPrintf("hv (%s): addChord", hv.ap.String())
+	if baseChNode != nil {
+		DPrintf("hv (%s): addChord: baseCh: %s", hv.ap.String(), baseChNode.String())
+	} else {
+		DPrintf("hv (%s): addChord: baseCh: nil", hv.ap.String())
+	}
 
 	// Ensure everything is initialized.
 	if hv.chs == nil {
@@ -373,9 +380,10 @@ func (hv *Hyperviser) addChordBase(baseChNode *chordkv.Node) error {
 		DPrintf("hv (%s): addChord: makeChord failed: %s", hv.ap.String(), err)
 
 		// Use a random port because port.New() is kind of trash.
-		p, err = pickRandomPort()
-		if err != nil {
-			return err
+		var err1 error
+		p, err1 = pickRandomPort()
+		if err1 != nil {
+			return err1
 		}
 	}
 	if err != nil {
@@ -389,7 +397,14 @@ func (hv *Hyperviser) addChordBase(baseChNode *chordkv.Node) error {
 		return fmt.Errorf("StartRPC failed: %s", err)
 	}
 
+	if ch == nil {
+		CPrintf(White, "hv (%s):%s addChordBase:%s nil chord", hv.ap.String(), Red, Blue)
+	}
 	*hv.chs = append(*hv.chs, &chordSet{ch, kvs, rpcs})
+
+	n := ch.GetNode()
+	CPrintf(Yellow, "hv (%s): addChordBase: created chord %s [%016x]",
+		hv.ap.String(), n.String(), n.Hash)
 	time.Sleep(time.Second)
 	return nil
 }
@@ -707,12 +722,6 @@ func (hv *Hyperviser) initServers(targetNodes int) *map[AddrPair]*serverInfo {
 		nodesRemaining--
 	}
 
-	DPrintf("hv (%s): initserver: len(servers): %d", hv.ap.String(), len(servers))
-	DPrintf("hv (%s): at end of initServers. Needed %d nodes. Used:", hv.ap.String(), targetNodes)
-	for ap, info := range servers {
-		DPrintf("\t%s): %d", ap.String(), info.targetNumChs)
-	}
-
 	return &servers
 }
 
@@ -775,7 +784,6 @@ func (hv *Hyperviser) sendPrepare(ap AddrPair, info *serverInfo, logName string)
 			hv.ap.String(), ap.String(), err)
 	}
 
-	CPrintf(Yellow, "hv (%s): sendPrepare (%s): acquiring locks", hv.ap.String(), ap.String())
 	hv.mu.Lock()
 	hv.ls.mu.Lock()
 	// This if statement seems redundant but it uses the lock for less time than
@@ -788,7 +796,6 @@ func (hv *Hyperviser) sendPrepare(ap AddrPair, info *serverInfo, logName string)
 	}
 	hv.ls.mu.Unlock()
 	hv.mu.Unlock()
-	CPrintf(Yellow, "hv (%s): sendPrepare (%s): locks released", hv.ap.String(), ap.String())
 }
 
 // prepareLeader used to initialize leader in goroutine.
@@ -913,6 +920,7 @@ func (hv *Hyperviser) StartLeader(testType TestType, leaderLog, testLog string) 
 
 		n := (*hv.chs)[0].ch.GetNode()
 		hv.ti.baseCh = &n
+		CPrintf(White, "hv (%s): baseChord: %s", hv.ap.String(), hv.ti.baseCh.String())
 
 		info := (*hv.ls.servers)[hv.ap]
 		info.numChs = 1
@@ -990,6 +998,11 @@ func (hv *Hyperviser) StartLeader(testType TestType, leaderLog, testLog string) 
 
 		hv.ls.lg.Printf("Test %d Succeeded", batchNum)
 		DPrintf("hv (%s): Test %d Succeeded", hv.ap.String(), batchNum)
+
+		// Clean up leader
+		hv.mu.Lock()
+		hv.closeChords()
+		hv.mu.Unlock()
 	}
 
 	return nil
