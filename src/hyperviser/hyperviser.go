@@ -312,7 +312,6 @@ func (hv *Hyperviser) stopTest(useLocks bool) {
 func pickRandomPort() (int, error) {
 	var p int
 	done := false
-	DPrintf("pickRandomPort: starting")
 	for i := 0; i < 50; i++ {
 		p = rand.Intn(maxPort-minPort) + minPort
 		if done, _ = port.Check(p); done {
@@ -320,7 +319,6 @@ func pickRandomPort() (int, error) {
 		}
 	}
 
-	DPrintf("pickRandomPort: leaving. p = %d", p)
 	if done {
 		return p, nil
 	}
@@ -330,6 +328,26 @@ func pickRandomPort() (int, error) {
 // Add a chord instance to hv using baseCh to initialize the new chord. THIS
 // METHOD ASSUMES THAT IT IS CALLED FROM A LOCKING CONTEXT.
 func (hv *Hyperviser) addChord(baseChNode *chordkv.Node) error {
+	// Try to add chord up to three times. addChordBase usually failed because
+	// it tried to make a chord instance with a port that is already in use, so
+	// trying again should normally fix the problem.
+	var err error
+	for i := 0; i < 3; i++ {
+		if i > 0 {
+			DPrintf("hv (%s): addChord: retrying", hv.ap.String())
+		}
+		err = hv.addChordBase(baseChNode)
+		if err == nil {
+			return nil
+		}
+		DPrintf("hv (%s): addChord failed%d: %s", hv.ap.String(), i+1, err)
+	}
+	return err
+}
+
+// Add a chord instance to hv using baseCh to initialize the new chord. THIS
+// METHOD ASSUMES THAT IT IS CALLED FROM A LOCKING CONTEXT.
+func (hv *Hyperviser) addChordBase(baseChNode *chordkv.Node) error {
 	DPrintf("hv (%s): addChord", hv.ap.String())
 
 	// Ensure everything is initialized.
@@ -341,14 +359,10 @@ func (hv *Hyperviser) addChord(baseChNode *chordkv.Node) error {
 	if err != nil {
 		return fmt.Errorf("port.New failed: %s", err)
 	}
-	DPrintf("hv (%s): inital p = %d", hv.ap.String(), p)
 
 	// Try three times
 	var ch *chordkv.Chord
 	for i := 0; i < 3; i++ {
-		if p == 0 {
-			DPrintf("hv (%s): wft? port = %d", hv.ap.String(), p)
-		}
 		DPrintf("hv (%s): addchord: MakeNode(%s, %d)", hv.ap.String(), hv.ap.IP, p)
 		n := chordkv.MakeNode(net.ParseIP(hv.ap.IP), p)
 		DPrintf("hv (%s): addChord: Calling MakeChord %s", hv.ap.String(), n.String())
@@ -377,7 +391,6 @@ func (hv *Hyperviser) addChord(baseChNode *chordkv.Node) error {
 
 	*hv.chs = append(*hv.chs, &chordSet{ch, kvs, rpcs})
 	time.Sleep(time.Second)
-	DPrintf("hv (%s): addChord: returning", hv.ap.String())
 	return nil
 }
 
@@ -697,7 +710,7 @@ func (hv *Hyperviser) initServers(targetNodes int) *map[AddrPair]*serverInfo {
 	DPrintf("hv (%s): initserver: len(servers): %d", hv.ap.String(), len(servers))
 	DPrintf("hv (%s): at end of initServers. Needed %d nodes. Used:", hv.ap.String(), targetNodes)
 	for ap, info := range servers {
-		DPrintf("\t%s: %d", ap.String(), info.targetNumChs)
+		DPrintf("\t%s): %d", ap.String(), info.targetNumChs)
 	}
 
 	return &servers
@@ -821,7 +834,7 @@ func (hv *Hyperviser) sendStart(ap AddrPair, info *serverInfo, logName string) {
 
 // startLeaderTest runs current test on leader.
 func (hv *Hyperviser) startLeaderTest() {
-	DPrintf("hv (%s) startLeaderTest", hv.ap.String())
+	DPrintf("hv (%s): startLeaderTest", hv.ap.String())
 	err := tests[hv.ti.testType].f(hv)
 
 	hv.ls.mu.Lock()
