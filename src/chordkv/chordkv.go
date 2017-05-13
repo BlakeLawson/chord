@@ -52,9 +52,9 @@ func externalIP() (string, error) {
 // ChordKV contains everything everything necessary to use the chord lookup
 // service with a distributed key value store.
 type ChordKV struct {
-	Ch *Chord
-	Kvs *KVServer
-	Rpcs *RPCServer
+	Ch     *Chord
+	Kvs    *KVServer
+	Rpcs   *RPCServer
 	Client *KVClient
 }
 
@@ -72,6 +72,12 @@ func MakeChordKVDbg(existingNode *Node, useLocalhost bool) (*ChordKV, error) {
 	ch := &Chord{}
 	kvs := &KVServer{}
 
+	// Get the IP at the start because there is no point continuing if this fails.
+	ip, err := externalIP()
+	if err != nil {
+		return nil, fmt.Errorf("Could not find IP: %s", err)
+	}
+
 	// Initialize RPCServer with port 0 so OS picks the port.
 	var addr string
 	if useLocalhost {
@@ -85,6 +91,10 @@ func MakeChordKVDbg(existingNode *Node, useLocalhost bool) (*ChordKV, error) {
 		return nil, fmt.Errorf("RPCServer initialilzation failed: %s", err)
 	}
 
+	// Ensure that rpcs does not serve any requests until ch is initialized.
+	rpcs.initBarrier.Lock()
+	defer rpcs.initBarrier.Unlock()
+
 	rpcAddr := rpcs.GetAddr().String()
 	_, portString, err := net.SplitHostPort(rpcAddr)
 	if err != nil {
@@ -97,21 +107,7 @@ func MakeChordKVDbg(existingNode *Node, useLocalhost bool) (*ChordKV, error) {
 		return nil, fmt.Errorf("Failed to parse %s: %s", portString, err)
 	}
 
-	ip, err := externalIP()
-	if err != nil {
-		rpcs.End()
-		return nil, fmt.Errorf("Could not find IP: %s", err)
-	}
-
 	n := MakeNode(net.ParseIP(ip), p)
-	if existingNode != nil {
-		CPrintf(Yellow, "Initializing chord with addr %s and existingNode %s",
-			n.String(), existingNode.String())
-	} else {
-		CPrintf(Yellow, "Initializing chord with addr %s and existingNode nil",
-			n.String())
-	}
-
 	ch, err = MakeChord(n, existingNode)
 	if err != nil {
 		rpcs.End()

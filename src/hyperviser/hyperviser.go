@@ -240,10 +240,8 @@ type TestArgs struct {
 func (hv *Hyperviser) PrepareTest(args *TestArgs, reply *struct{}) error {
 	DPrintf("hv (%s): PrepareTest %s called from %s", hv.ap.String(),
 		args.TType, args.AA.AP.String())
-	CPrintf(Green, "hv (%s): PrepareTest: acquiring locks", hv.ap.String())
 	hv.mu.Lock()
 	defer hv.mu.Unlock()
-	CPrintf(Green, "hv (%s): PrepareTest: locks acquired", hv.ap.String())
 	if err := hv.validate(args.AA); err != nil {
 		return err
 	}
@@ -275,7 +273,6 @@ func (hv *Hyperviser) PrepareTest(args *TestArgs, reply *struct{}) error {
 	hv.ti.tNum++
 
 	// Prepare the test.
-	DPrintf("hv (%s): PrepareTest %s calling initTest", hv.ap.String(), args.TType)
 	go hv.initTest(args.NumChords)
 
 	return nil
@@ -399,7 +396,6 @@ func (hv *Hyperviser) addChordBase(baseChNode *chordkv.Node) error {
 
 // initTest configures this hyperviser instance to test.
 func (hv *Hyperviser) initTest(numChords int) {
-	CPrintf(Green, "hv (%s): initTest: getting locks", hv.ap.String())
 	hv.mu.Lock()
 	defer hv.mu.Unlock()
 	DPrintf("hv (%s): initTest(%d)", hv.ap.String(), numChords)
@@ -768,6 +764,8 @@ func (hv *Hyperviser) sendPrepare(ap AddrPair, info *serverInfo, logName string)
 	timeout := time.Duration(info.targetNumChs)*time.Second + 5
 	err := callRPC(prepareTestRPC, ap, timeout, args, &reply)
 	if err != nil {
+		DPrintf("hv (%s): sendPrepare: RPC to %s failed: %s",
+			hv.ap.String(), ap.String(), err)
 		hv.ls.lg.Printf("sendPrepare: RPC to %s failed: %s",
 			hv.ap.String(), ap.String(), err)
 	}
@@ -818,13 +816,15 @@ func (hv *Hyperviser) sendStart(ap AddrPair, info *serverInfo, logName string) {
 	hv.mu.Lock()
 	hv.ls.mu.Lock()
 	if err != nil {
-		hv.ls.lg.Printf("sendStart: RPC to %s failed: %s", ap, err)
+		DPrintf("hv (%s): sendStart: RPC to %s failed: %s",
+			hv.ap.String(), ap.String(), err)
+		hv.ls.lg.Printf("sendStart: RPC to %s failed: %s", ap.String(), err)
 		info.status = unresponsiveSt
 	} else {
 		info.status = testingSt
 	}
-	hv.mu.Unlock()
 	hv.ls.mu.Unlock()
+	hv.mu.Unlock()
 }
 
 // startLeaderTest runs current test on leader.
@@ -999,11 +999,8 @@ func (hv *Hyperviser) StartLeader(testType TestType, leaderLog, testLog string) 
 // Ready called by test followers when they are ready to begin the test.
 func (hv *Hyperviser) Ready(args *AuthArgs, reply *struct{}) error {
 	CPrintf(Blue, "hv (%s): Ready from %s", hv.ap.String(), args.AP.String())
-	DPrintf("hv (%s): Ready: getting locks", hv.ap.String())
 
-	// TODO: deadlock here
 	hv.mu.Lock()
-	DPrintf("hv (%s): Ready: have locks", hv.ap.String())
 	if err := hv.validate(args); err != nil {
 		hv.mu.Unlock()
 		return err
@@ -1028,7 +1025,6 @@ func (hv *Hyperviser) Ready(args *AuthArgs, reply *struct{}) error {
 
 	info.status = readySt
 	hv.ls.readyWg.Done()
-	CPrintf(Blue, "hv (%s): Ready %s", hv.ap.String(), args.AP.String())
 	return nil
 }
 
@@ -1207,7 +1203,7 @@ var tests = map[TestType]testConfig{
 		f:       lookupPerf,
 		timeout: time.Minute},
 	HelloWorld: testConfig{
-		phases:  []int{1, 2, 4, 10, 20},
+		phases:  []int{1, 2, 4, 7, 10, 20, 50},
 		f:       helloWorld,
 		timeout: 10 * time.Second},
 }

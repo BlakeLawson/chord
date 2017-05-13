@@ -13,14 +13,12 @@ import (
 )
 
 const (
-	// TODO: revisit these numbers
 	isIterative      bool          = true
 	sListSize        int           = 10
 	ftableSize       int           = 64
 	stabilizeTimeout time.Duration = 250 * time.Millisecond
 )
 
-//TODO: handling failures not necessarily because node fails but maybe due to network error
 // Chord represents single Chord instance.
 type Chord struct {
 	mu sync.Mutex
@@ -157,6 +155,13 @@ func (ch *Chord) iterativeLookup(h UHash) (*Chord, error) {
 // THIS METHOD ASSUMES THAT IT IS CALLED FROM A LOCKING CONTEXT.
 // IT WOULD BE UNWISE TO CALL LOOKUP IN THIS METHOD EVEN FOR FAULT TOLERANCE
 func (ch *Chord) FindClosestNode(h UHash) *Node {
+	if ch.predecessor == nil {
+		CPrintf(Red, "ch [%s]: FindClosestNode: ch.predecessor = nil", ch.n.String())
+	}
+	if ch.n == nil {
+		CPrintf(Red, "ch: FindClosestNode: ch.n = nil")
+	}
+
 	// If I am closest, return myself
 	if inRange(h, ch.predecessor.Hash, ch.n.Hash) {
 		return ch.n
