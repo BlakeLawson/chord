@@ -18,7 +18,7 @@ const (
 	sListSize          int           = 10
 	ftableSize         int           = 64
 	stabilizeTimeout   time.Duration = 250 * time.Millisecond
-	updateSlistTimeout time.Duration = 250 * time.Millisecond
+	updateSlistTimeout time.Duration = 200 * time.Millisecond
 )
 
 // Chord represents single Chord instance.
@@ -188,6 +188,8 @@ func (ch *Chord) FindClosestNode(h UHash) (*Node, error) {
 				return node, nil
 			}
 			failedNode = node
+			// fixFinger
+			go ch.fixFinger(i)
 			// if there is an error, either return the node immediately before failed node or
 			// if all these nodes fail or it was just successor that failed go to successor list
 			for j := i - 1; j >= 0; j-- {
@@ -196,13 +198,14 @@ func (ch *Chord) FindClosestNode(h UHash) (*Node, error) {
 				if err == nil {
 					return tempNode, nil
 				}
+				go ch.fixFinger(i)
 			}
 			trySuccessors = true
 		}
 
 	}
 
-	// try all appropriate successors to handle node failutes
+	// try all appropriate successors to handle node failures
 	if trySuccessors {
 		prev := ch.n
 		for _, successor := range ch.slist {
@@ -245,6 +248,10 @@ func (ch *Chord) Notify(n *Node) error {
 		ch.predecessor = n
 		ch.ftable[0] = n
 		ch.slist[0] = n
+		// if predecessor dead, n, is probably your predecessor
+	} else if err := ch.predecessor.RemotePing(); err != nil {
+		ch.predecessor = n
+		// else if it is alive, check if n is inrange
 	} else if inRange(n.Hash, ch.predecessor.Hash, ch.n.Hash) {
 		ch.predecessor = n
 	}
@@ -255,6 +262,12 @@ func (ch *Chord) Notify(n *Node) error {
 // Pick a random entry in the finger table and check whether it is up to date.
 func (ch *Chord) fixFingers() error {
 	i := rand.Intn(len(ch.ftable)-1) + 1
+	err := ch.fixFinger(i)
+	return err
+}
+
+// Pick a random entry in the finger table and check whether it is up to date.
+func (ch *Chord) fixFinger(i int) error {
 	ftCh, err := ch.Lookup(ch.ftableStart(i))
 	if err != nil {
 		return fmt.Errorf("error on %d: %s", i, err)
@@ -356,11 +369,11 @@ func (ch *Chord) updateSuccessorlist() {
 					nextSucc, err := succ.RemoteGetSucc()
 					// if this fails, lookupUp the would be nextSucc of succ
 					if err != nil {
-						nextSuccCh, err := ch.n.RemoteLookup((succ.Hash + 1) % MaxUHash)
+						nextSuccCh, err := ch.Lookup((succ.Hash + 1) % MaxUHash)
 
 						// if RemoteLookup fails, handle silently by printing; successor is previous successor
 						if err != nil {
-							DPrintf("ch.updateSuccessorlist [%s]: RemoteLookup(%s) failed: %s\n", ch.n.String(),
+							DPrintf("ch.updateSuccessorlist [%s]: Lookup(%s) failed: %s\n", ch.n.String(),
 								(succ.Hash+1)%MaxUHash)
 							nextSucc = ch.slist[i-1]
 						} else {
@@ -462,21 +475,31 @@ func (ch *Chord) findPredecessor(h UHash) (*Node, error) {
 // updateSuccessor updates the successor in ftable and slist if dead.
 // If it can't find the successor, it returns an error.
 func (ch *Chord) updateSuccessor() error {
+	// should not be nil when system starts
 	err := ch.ftable[0].RemotePing()
 	if err != nil {
-		// lookup successor, notify it that this is its prdecessor
+		// get successor's successor from slist notify it that this is its predecessor
 		// if this fails, fail silently and print
-		hash := (ch.n.Hash + 1) % MaxUHash
-		succCh, err := ch.n.RemoteLookup(hash)
-		if err != nil {
-			return err
+		//log.Printf("\tchord [0x%016x] Successor [0x%016x] dead", ch.n.Hash, ch.ftable[0].Hash)
+
+		var succ *Node
+		for i := 1; i < sListSize; i++ {
+			ch.mu.Lock()
+			succ = ch.slist[i]
+			ch.mu.Unlock()
+			err = succ.RemotePing()
+			if err == nil {
+				//log.Printf("\tchord [0x%016x] Successor is now [0x%016x]", ch.n.Hash, succ.Hash)
+				break
+			}
 		}
 		ch.mu.Lock()
-		ch.slist[0] = succCh.n
-		ch.ftable[0] = succCh.n
+		ch.slist[0] = succ
+		ch.ftable[0] = succ
 		ch.mu.Unlock()
-		succCh.n.RemoteNotify(ch.n)
+		succ.RemoteNotify(ch.n)
 	}
+	//log.Printf("\tchord [0x%016x] Successor [0x%016x] alive", ch.n.Hash, ch.ftable[0].Hash)
 	return nil
 }
 
