@@ -109,9 +109,9 @@ func (ch *Chord) recursiveLookup(h UHash) (*Chord, int, error) {
 
 // ForwardLookup forwards the lookup to an appropriate node closer to h. If this
 // chord instance is responsible for h, it lets the source of the lookup know.
-// TODO: should this be done in a go routine? This blocks when a request is forwarded until last node sens resul
 func (ch *Chord) ForwardLookup(h UHash, source *Chord, rID, hops int) error {
-	// base case. if this node is responsible for h, let the source of the lookup know
+	// Base case. If this node is responsible for h, let the source of the
+	// lookup know.
 	ch.mu.Lock()
 	if inRange(h, ch.predecessor.Hash, ch.n.Hash) {
 		ch.mu.Unlock()
@@ -125,10 +125,6 @@ func (ch *Chord) ForwardLookup(h UHash, source *Chord, rID, hops int) error {
 	ch.mu.Unlock()
 	return dest.RemoteForwardLookup(h, source, rID, hops)
 }
-
-// TODO: make code less error prone by changing position of similar variables
-// (e.g. rId and hops) in function heading to make it less likely for them to
-// be swappped
 
 // ReceiveLookUpResult receives lookup result and passes it to the respChanMap
 func (ch *Chord) receiveLookUpResult(result *Chord, rID, hops int) error {

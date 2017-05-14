@@ -113,7 +113,9 @@ type GetPredReply struct {
 // GetPred returns the predecessor of the Chord instance on this server.
 func (rpcs *RPCServer) GetPred(args *GetPredArgs, reply *GetPredReply) error {
 	rpcs.checkInit()
+	rpcs.ch.mu.Lock()
 	reply.N = rpcs.ch.predecessor
+	rpcs.ch.mu.Unlock()
 	return nil
 }
 
@@ -181,10 +183,17 @@ type ChordFields struct {
 func serializeChord(ch *Chord) *ChordFields {
 	ch.mu.Lock()
 	defer ch.mu.Unlock()
+
+	// Defensive copy of the underlying ftable
+	nftable := make([]Node, len(ch.ftable))
+	for i := 0; i < len(ch.ftable); i++ {
+		nftable[i] = ch.ftable[i]
+	}
+
 	return &ChordFields{
 		N:           ch.n,
 		Predecessor: ch.predecessor,
-		FTable:      ch.ftable,
+		FTable:      nftable,
 	}
 }
 
@@ -192,10 +201,17 @@ func deserializeChord(chFields *ChordFields) *Chord {
 	if chFields == nil {
 		return nil
 	}
+
+	// Defensive copy of the underlying slice
+	ftable := make([]Node, len(chFields.FTable))
+	for i := 0; i < len(chFields.FTable); i++ {
+		ftable[i] = chFields.FTable[i]
+	}
+
 	return &Chord{
 		n:           chFields.N,
 		predecessor: chFields.Predecessor,
-		ftable:      chFields.FTable,
+		ftable:      ftable,
 		isRunning:   true,
 	}
 }

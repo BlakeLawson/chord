@@ -329,9 +329,13 @@ func pickRandomPort() (int, error) {
 	return 0, fmt.Errorf("Couldn't find port")
 }
 
-// Add a chord instance to hv using baseCh to initialize the new chord. THIS
-// METHOD ASSUMES THAT IT IS CALLED FROM A LOCKING CONTEXT.
-func (hv *Hyperviser) addChord(baseChNode *chordkv.Node) error {
+// Add a chord instance to hv using baseCh to initialize the new chord.
+func (hv *Hyperviser) addChord(baseChNode *chordkv.Node, useLocks bool) error {
+	if useLocks {
+		hv.mu.Lock()
+		defer hv.mu.Unlock()
+	}
+
 	// Try to add chord up to three times. addChordBase usually failed because
 	// it tried to make a chord instance with a port that is already in use, so
 	// trying again should normally fix the problem.
@@ -397,7 +401,7 @@ func (hv *Hyperviser) initTest(numChords int) {
 
 	CPrintf(Blue, "hv (%s): initTest: after validation", hv.ap.String())
 	for i := 0; i < numChords; i++ {
-		if err := hv.addChord(hv.ti.baseCh); err != nil {
+		if err := hv.addChord(hv.ti.baseCh, false); err != nil {
 			DPrintf("hv (%s): initTest: addChord failed: %s", hv.ap.String(), err)
 			hv.stopTest(false)
 			return
@@ -556,7 +560,7 @@ func (hv *Hyperviser) AddChord(args *RingModArgs, reply *struct{}) error {
 	}
 
 	for i := 0; i < args.N; i++ {
-		if err := hv.addChord(baseChNode); err != nil {
+		if err := hv.addChord(baseChNode, false); err != nil {
 			return err
 		}
 	}
@@ -778,9 +782,11 @@ func (hv *Hyperviser) sendPrepare(ap AddrPair, info *serverInfo, logName string)
 // prepareLeader used to initialize leader in goroutine.
 func (hv *Hyperviser) prepareLeader() {
 	DPrintf("hv (%s): prepareLeader", hv.ap.String())
+
+	hv.ls.mu.Lock()
 	info := (*hv.ls.servers)[hv.ap]
 	for i := 1; i < info.targetNumChs; i++ {
-		if err := hv.addChord(hv.ti.baseCh); err != nil {
+		if err := hv.addChord(hv.ti.baseCh, true); err != nil {
 			hv.ls.lg.Printf("prepareLeader: initChord failed: %s", err)
 			return
 		}
@@ -789,6 +795,7 @@ func (hv *Hyperviser) prepareLeader() {
 	hv.ti.tNum = info.targetNumChs
 	info.numChs = info.targetNumChs
 	info.status = readySt
+	hv.ls.mu.Unlock()
 	CPrintf(Red, "hv (%s): prepareLeader Done", hv.ap.String())
 	hv.ls.readyWg.Done()
 }
@@ -889,9 +896,11 @@ func (hv *Hyperviser) StartLeader(testType TestType, leaderLog, testLog string) 
 	// TODO: should rewrite to reuse existing chord instances rather than
 	// tearing down every time.
 	for batchNum, batchSize := range tests[testType].phases {
+		hv.mu.Lock()
 		logName := fmt.Sprintf("%s%d", testLog, batchSize)
 		f, err = os.Create(hv.logDir + logName)
 		if err != nil {
+			hv.mu.Unlock()
 			return fmt.Errorf("Creating test log failed: %s", err)
 		}
 		hv.ti.lgBuf = f
@@ -902,7 +911,8 @@ func (hv *Hyperviser) StartLeader(testType TestType, leaderLog, testLog string) 
 		hv.ls.servers = hv.initServers(batchSize)
 
 		// Initialize leader's chords
-		if err := hv.addChord(nil); err != nil {
+		if err := hv.addChord(nil, false); err != nil {
+			hv.mu.Unlock()
 			return fmt.Errorf("First chord initialization failed: %s", err)
 		}
 
@@ -918,7 +928,6 @@ func (hv *Hyperviser) StartLeader(testType TestType, leaderLog, testLog string) 
 		DPrintf("hv (%s): Preparing for test", hv.ap.String())
 		hv.ls.readyWg = &sync.WaitGroup{}
 
-		hv.mu.Lock()
 		hv.ti.isReady = true
 		hv.mu.Unlock()
 		for ap, info := range *hv.ls.servers {

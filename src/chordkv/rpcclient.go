@@ -10,7 +10,7 @@ import (
 )
 
 func (n *Node) openConn() (*rpc.Client, error) {
-	conn, err := net.DialTimeout("tcp", n.String(), 500*time.Millisecond)
+	conn, err := net.DialTimeout("tcp", n.String(), 5*time.Second)
 	if err != nil {
 		return nil, err
 	}
