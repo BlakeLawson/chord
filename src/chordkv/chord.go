@@ -239,7 +239,7 @@ func (ch *Chord) Notify(n Node) error {
 
 // Pick a random entry in the finger table and check whether it is up to date.
 func (ch *Chord) fixFingers() error {
-	i := rand.Intn(len(ch.ftable)-1) + 1
+	i := rand.Intn(ftableSize-1) + 1
 	err := ch.fixFinger(i)
 	return err
 }
@@ -300,7 +300,10 @@ func (ch *Chord) stabilizeImpl() {
 			ch.n.String(), err)
 	}
 
-	err = ch.ftable[0].RemoteNotify(ch.n)
+	ch.mu.Lock()
+	succ := ch.ftable[0]
+	ch.mu.Unlock()
+	err = succ.RemoteNotify(ch.n)
 	if !ch.checkRunning() {
 		return
 	}
