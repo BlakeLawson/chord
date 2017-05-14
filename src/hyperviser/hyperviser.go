@@ -346,50 +346,14 @@ func (hv *Hyperviser) addChordBase(baseChNode *chordkv.Node) error {
 	if err != nil {
 		return err
 	}
-
-	// p, err := port.New()
-	// if err != nil {
-	// 	return fmt.Errorf("port.New failed: %s", err)
-	// }
-
-	// // Try three times
-	// var ch *chordkv.Chord
-	// for i := 0; i < 3; i++ {
-	// 	DPrintf("hv (%s): addchord: MakeNode(%s, %d)", hv.ap.String(), hv.ap.IP, p)
-	// 	n := chordkv.MakeNode(net.ParseIP(hv.ap.IP), p)
-	// 	DPrintf("hv (%s): addChord: Calling MakeChord %s", hv.ap.String(), n.String())
-	// 	ch, err = chordkv.MakeChord(n, baseChNode)
-	// 	if err == nil {
-	// 		break
-	// 	}
-	// 	DPrintf("hv (%s): addChord: makeChord failed: %s", hv.ap.String(), err)
-
-	// 	// Use a random port because port.New() is kind of trash.
-	// 	var err1 error
-	// 	p, err1 = pickRandomPort()
-	// 	if err1 != nil {
-	// 		return err1
-	// 	}
-	// }
-	// if err != nil {
-	// 	return fmt.Errorf("MakeChord failed 3 times: %s", err)
-	// }
-
-	// kvs := chordkv.MakeKVServer(ch)
-	// rpcs, err := chordkv.StartRPC(ch, kvs, p)
-	// if err != nil {
-	// 	ch.Kill()
-	// 	return fmt.Errorf("StartRPC failed: %s", err)
-	// }
-
-	// if ch == nil {
-	// 	CPrintf(White, "hv (%s):%s addChordBase:%s nil chord", hv.ap.String(), Red, Blue)
-	// }
 	*hv.chkvs = append(*hv.chkvs, chkv)
 
-	n := chkv.Ch.GetNode()
-	CPrintf(Yellow, "hv (%s): addChordBase: created chord %s [%016x]",
-		hv.ap.String(), n.String(), n.Hash)
+	if debug {
+		n := chkv.Ch.GetNode()
+		CPrintf(Yellow, "hv (%s): addChordBase: created chord %s [%016x]",
+			hv.ap.String(), n.String(), n.Hash)
+	}
+
 	time.Sleep(time.Second)
 	return nil
 }
@@ -726,6 +690,7 @@ func (hv *Hyperviser) cleanLeader(useParentLock bool) {
 	DPrintf("hv (%s): cleanLeader about to lock hv.ls.mu", hv.ap.String())
 	hv.ls.mu.Lock()
 	defer hv.ls.mu.Unlock()
+	DPrintf("hv (%s): cleanLeader after lock", hv.ap.String())
 
 	for ap, info := range *hv.ls.servers {
 		if info.status != testingSt {
@@ -1199,19 +1164,51 @@ type testConfig struct {
 
 var tests = map[TestType]testConfig{
 	LookupPerf: testConfig{
-		phases:  []int{10, 30, 60, 90, 120, 150, 180, 200},
+		// phases:  []int{10, 30, 60, 90, 120, 150, 180, 200},
+		phases:  []int{5, 10},
 		f:       lookupPerf,
-		timeout: time.Minute},
+		timeout: 3 * time.Minute},
 	HelloWorld: testConfig{
 		phases:  []int{1, 2, 4, 7, 10, 20, 50},
 		f:       helloWorld,
 		timeout: 10 * time.Second},
 }
 
+// Return random Chord key.
+func generateKey() chordkv.UHash {
+	r := rand.Uint32()
+	return chordkv.Hash(fmt.Sprintf("%08x", r))
+}
+
 // lookupPerf measures lookup latency as a function of number of nodes in the
-// chord ring.
+// chord ring. Writes data to log file in form:
+//     Lookup <ChordID> <Lookup Key> <Succeeded|Failed> <num hops> <latency>
 func lookupPerf(hv *Hyperviser) error {
-	return nil
+	// From Chord paper: each physical site issues 16 Chord lookups for randomly
+	// chosen keys one-by-one.
+	const numRequests = 16
+
+	// Only sends one set of requests per physical site, so same node
+	// for everything.
+	ch := (*hv.chkvs)[0].Ch
+	var outErr error = nil
+	for i := 0; i < numRequests; i++ {
+		r := generateKey()
+		_, info, err := ch.Lookup(r)
+		if err != nil {
+			outErr = err
+			DPrintf("hv (%s): lookupPerf: lookup %016x on %016x failed: %s",
+				hv.ap.String(), r, ch.GetID())
+			hv.ti.lg.Printf("Lookup %016x -> %016x Failed %s", ch.GetID(), r, err)
+		}
+
+		hv.ti.lg.Printf("Lookup %016x -> %016x Succeeded %d %f",
+			ch.GetID(), r, info.Hops, info.Latency.Seconds())
+	}
+
+	// Make sure all nodes have time to finish.
+	time.Sleep(30 * time.Second)
+	return outErr
 }
 
 // helloWorld used to test the hyperviser framework. Plz work

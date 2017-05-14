@@ -45,13 +45,13 @@ type Chord struct {
 	respChanMap map[int]chan *LookupResult
 }
 
-// LookupInfo ...
+// LookupInfo used to return performance information to user.
 type LookupInfo struct {
 	Hops    int
 	Latency time.Duration
 }
 
-// LookupResult ...
+// LookupResult is response from other chord instance during recursive lookup.
 type LookupResult struct {
 	chordResult *Chord
 	hops        int
@@ -264,6 +264,45 @@ func (ch *Chord) fixFinger(i int) error {
 	return nil
 }
 
+// Verify successor pointer up to date and update finger table.
+// TODO: Add fault tolerance with successor list.
+// TODO: Double check concurrency controls here.
+func (ch *Chord) stabilizeImpl() {
+	pSucc, err := ch.ftable[0].RemoteGetPred()
+	if !ch.checkRunning() {
+		return
+	}
+	// If successor is dead, call (check and) updateSuccessor
+	if err != nil {
+		DPrintf("stabilize: chord [%s]: RemoteGetPred() failed: %s\n", ch.n.String(), err)
+	} else {
+		ch.mu.Lock()
+		if inRange(pSucc.Hash, ch.n.Hash, ch.ftable[0].Hash) {
+			ch.ftable[0] = pSucc
+		}
+		ch.mu.Unlock()
+	}
+
+	err = ch.fixFingers()
+	if !ch.checkRunning() {
+		return
+	}
+	if err != nil {
+		// Not sure how to handle this case. Going to fail loudly for now.
+		DPrintf("chord [%s]: fixFingers() failed: %s\n",
+			ch.n.String(), err)
+	}
+
+	err = ch.ftable[0].RemoteNotify(ch.n)
+	if !ch.checkRunning() {
+		return
+	}
+	if err != nil {
+		DPrintf("chord [%s]: Notify(%s) failed: %s\n", ch.n.String(),
+			ch.ftable[0].String(), err)
+	}
+}
+
 // Stabilize periodically verify that ch's successor pointer is correct and
 // notify the successor that ch exists.
 func (ch *Chord) Stabilize() {
@@ -275,44 +314,7 @@ func (ch *Chord) Stabilize() {
 		case <-ch.killStabilizeChan:
 			return
 		case <-t.C:
-			// Verify successor pointer up to date and update finger table.
-			// TODO: Add fault tolerance with successor list.
-			// TODO: Double check concurrency controls here.
-			go func() {
-				pSucc, err := ch.ftable[0].RemoteGetPred()
-				if !ch.checkRunning() {
-					return
-				}
-				// If successor is dead, call (check and) updateSuccessor
-				if err != nil {
-					DPrintf("stabilize: chord [%s]: RemoteGetPred() failed: %s\n", ch.n.String(), err)
-				} else {
-					ch.mu.Lock()
-					if inRange(pSucc.Hash, ch.n.Hash, ch.ftable[0].Hash) {
-						ch.ftable[0] = pSucc
-					}
-					ch.mu.Unlock()
-				}
-
-				err = ch.fixFingers()
-				if !ch.checkRunning() {
-					return
-				}
-				if err != nil {
-					// Not sure how to handle this case. Going to fail loudly for now.
-					DPrintf("chord [%s]: fixFingers() failed: %s\n",
-						ch.n.String(), err)
-				}
-
-				err = ch.ftable[0].RemoteNotify(ch.n)
-				if !ch.checkRunning() {
-					return
-				}
-				if err != nil {
-					DPrintf("chord [%s]: Notify(%s) failed: %s\n", ch.n.String(),
-						ch.ftable[0].String(), err)
-				}
-			}()
+			go ch.stabilizeImpl()
 		}
 	}
 }
@@ -506,4 +508,9 @@ func (ch *Chord) Kill() {
 	} else {
 		ch.mu.Unlock()
 	}
+}
+
+// GetID return's ch's identifier.
+func (ch *Chord) GetID() UHash {
+	return ch.n.Hash
 }

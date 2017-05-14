@@ -10,9 +10,7 @@ import (
 )
 
 const (
-	testPass      = "abc"
-	testLogName   = "out"
-	leaderLogName = "leader"
+	testPass = "abc"
 )
 
 // Fix path and create the test directory in the test.
@@ -36,10 +34,8 @@ func TestInitialization(t *testing.T) {
 
 	hvs := make([]*Hyperviser, len(serverAddrs))
 	i := 0
-	fmt.Printf("len(serverAddres): %d\n", len(serverAddrs))
 	var err error
 	for ap := range serverAddrs {
-		fmt.Printf("Using %s\n", ap.String())
 		hvs[i], err = makePort(ap.IP, testPass, testLogDir, ap.Port)
 		if err != nil {
 			t.Fatalf("Initializing hv %s failed: %s", ap.String(), err)
@@ -55,12 +51,13 @@ func TestHelloWorld(t *testing.T) {
 	fmt.Println("Test: Hello World ...")
 	setup()
 
-	fmt.Printf("len(serverAddres): %d\n", len(serverAddrs))
+	testLogName := "helloOut"
+	leaderLogName := "helloLeader"
+
 	hvs := make([]*Hyperviser, len(serverAddrs))
 	i := 0
 	var err error
 	for ap := range serverAddrs {
-		fmt.Printf("Using %s\n", ap.String())
 		hvs[i], err = makePort(ap.IP, testPass, testLogDir, ap.Port)
 		if err != nil {
 			t.Fatalf("Initializing hv %s failed: %s", ap.String(), err)
@@ -75,4 +72,31 @@ func TestHelloWorld(t *testing.T) {
 	}
 
 	fmt.Println(" .. Passed")
+}
+
+// Test the performance test.
+func TestLookupPerf(t *testing.T) {
+	fmt.Println("Test: lookupPerf ...")
+	setup()
+
+	testLogName := "perfOut"
+	leaderLogName := "perfLeader"
+
+	hvs := make([]*Hyperviser, len(serverAddrs))
+	i := 0
+	var err error
+	for ap := range serverAddrs {
+		hvs[i], err = makePort(ap.IP, testPass, testLogDir, ap.Port)
+		if err != nil {
+			t.Fatalf("Initializing hv %s failed: %s", ap.String(), err)
+		}
+		defer hvs[i].Stop(true)
+	}
+
+	err = hvs[0].StartLeader(LookupPerf, leaderLogName, testLogName)
+	if err != nil {
+		t.Fatalf("lookupPerf failed: %s", err)
+	}
+
+	fmt.Println(" ... Passed")
 }
