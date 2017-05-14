@@ -9,6 +9,7 @@
 testTool
 
 # Test files
+.leaderfile
 .testfile*
 
 # Possibly atom files
