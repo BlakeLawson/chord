@@ -1104,6 +1104,10 @@ func (hv *Hyperviser) Failed(args *FailArgs, reply *struct{}) error {
 
 // Make a new Hyperviser.
 func Make(ip, pass, logDir string) (*Hyperviser, error) {
+	p1, _ := port.New()
+	serverAddrs = map[AddrPair]bool{
+		AddrPair{"127.0.0.1", p1}: true,
+	}
 	return makePort(ip, pass, logDir, defaultPort)
 }
 
