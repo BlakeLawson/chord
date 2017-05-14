@@ -9,7 +9,7 @@ type KVClient struct {
 
 // Get returns value associated with given key. Return nil on success.
 func (kvc *KVClient) Get(key string) (string, error) {
-	chNode, err := kvc.ch.Lookup(Hash(key))
+	chNode, _, err := kvc.ch.Lookup(Hash(key))
 	if err != nil {
 		return "", err
 	}
@@ -21,7 +21,7 @@ func (kvc *KVClient) Get(key string) (string, error) {
 // Put inserts key value pair into distributed kv store. Returns nil on
 // success.
 func (kvc *KVClient) Put(key string, val string) error {
-	chNode, err := kvc.ch.Lookup(Hash(key))
+	chNode, _, err := kvc.ch.Lookup(Hash(key))
 	if err != nil {
 		return err
 	}

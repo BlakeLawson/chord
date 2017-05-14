@@ -52,11 +52,28 @@ func (n *Node) RemotePut(key string, val string) error {
 	return client.Call("RPCServer.KVPut", args, &reply)
 }
 
-// RemoteLookup performs Lookup RPC on remote node.
-func (n *Node) RemoteLookup(h UHash) (*Chord, error) {
+// RemoteKVSize performs Size RPC on KVServer of remote node
+func (n *Node) RemoteKVSize() (int, error) {
 	client, err := n.openConn()
 	if err != nil {
-		return nil, err
+		return 0, err
+	}
+	defer client.Close()
+
+	var args KVSizeArgs
+	reply := KVSizeReply{}
+	err = client.Call("RPCServer.KVSize", &args, &reply)
+	if err != nil {
+		return 0, err
+	}
+	return reply.Size, nil
+}
+
+// RemoteLookup performs Lookup RPC on remote node.
+func (n *Node) RemoteLookup(h UHash) (*Chord, *LookupInfo, error) {
+	client, err := n.openConn()
+	if err != nil {
+		return nil, nil, err
 	}
 	defer client.Close()
 
@@ -64,10 +81,10 @@ func (n *Node) RemoteLookup(h UHash) (*Chord, error) {
 	var reply ChordLookupReply
 	err = client.Call("RPCServer.ChordLookup", args, &reply)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
-	return deserializeChord(&reply.ChFields), nil
+	return deserializeChord(&reply.ChFields), &(reply.Info), nil
 }
 
 // RemoteGetPred returns the predecessor of the specified node.
@@ -127,7 +144,7 @@ func (n *Node) RemoteFindClosestNode(h UHash) (*Node, *Chord, error) {
 }
 
 // RemoteForwardLookup forwards source's lookup on h to dest
-func (n *Node) RemoteForwardLookup(h UHash, source *Chord, rID int) error {
+func (n *Node) RemoteForwardLookup(h UHash, source *Chord, rID, hops int) error {
 	client, err := n.openConn()
 	if err != nil {
 		return err
@@ -137,6 +154,7 @@ func (n *Node) RemoteForwardLookup(h UHash, source *Chord, rID int) error {
 	args := &ForwardLookupArgs{
 		H:        h,
 		RID:      rID,
+		Hops:     hops + 1,
 		ChFields: *serializeChord(source)}
 
 	var reply ForwardLookupReply
@@ -149,7 +167,7 @@ func (n *Node) RemoteForwardLookup(h UHash, source *Chord, rID int) error {
 
 // RemoteSendLookupResult sends the lookup result from the result chord node
 // to the source of the lookup with the request ID rID
-func (n *Node) RemoteSendLookupResult(rID int, result *Chord) error {
+func (n *Node) RemoteSendLookupResult(rID, hops int, result *Chord) error {
 	client, err := n.openConn()
 	if err != nil {
 		return err
@@ -158,6 +176,7 @@ func (n *Node) RemoteSendLookupResult(rID int, result *Chord) error {
 
 	args := &LookupResultArgs{
 		RID:      rID,
+		Hops:     hops,
 		ChFields: *serializeChord(result)}
 
 	var reply LookupResultReply

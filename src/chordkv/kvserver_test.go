@@ -32,5 +32,10 @@ func TestKVServerBasic(t *testing.T) {
 		t.Fatalf("Overwrite value failed")
 	}
 
+	// Test StateSize method
+	if kvs.StateSize() != 1 {
+		t.Fatalf("State Size method failed")
+	}
+
 	fmt.Println(" ... Passed")
 }

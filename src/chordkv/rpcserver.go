@@ -51,7 +51,7 @@ type KVPutArgs struct {
 	Val string
 }
 
-// KVPutReply is a placeholder for KVPut RPC's return values since KVPut only
+// KVPutReply is a placeholder for KVPut RPC's reply  since KVPut only
 // needs to return an error.
 type KVPutReply interface{}
 
@@ -59,6 +59,20 @@ type KVPutReply interface{}
 func (rpcs *RPCServer) KVPut(args *KVPutArgs, reply *KVPutReply) error {
 	rpcs.checkInit()
 	rpcs.kv.Put(args.Key, args.Val)
+	return nil
+}
+
+// KVSizeArgs is a placeholder for KVSize RPC's args
+type KVSizeArgs interface{}
+
+// KVSizeReply holds reply to KVSize RPC.
+type KVSizeReply struct {
+	Size int
+}
+
+// KVSize returns result of StateSize on KVServer running on this RPCServer.
+func (rpcs *RPCServer) KVSize(args *KVSizeArgs, reply *KVSizeReply) error {
+	reply.Size = rpcs.kv.StateSize()
 	return nil
 }
 
@@ -70,18 +84,20 @@ type ChordLookupArgs struct {
 // ChordLookupReply holds reply to ChordLookup RPC.
 type ChordLookupReply struct {
 	ChFields ChordFields
+	Info     LookupInfo
 }
 
 // ChordLookup returns result of lookup performed by the Chord instance running
 // on this RPCServer.
 func (rpcs *RPCServer) ChordLookup(args *ChordLookupArgs, reply *ChordLookupReply) error {
 	rpcs.checkInit()
-	rCh, err := rpcs.ch.Lookup(args.H)
+	rCh, info, err := rpcs.ch.Lookup(args.H)
 	if err != nil {
 		return err
 	}
 
 	reply.ChFields = *serializeChord(rCh)
+	reply.Info = *info
 	return nil
 }
 
@@ -189,6 +205,7 @@ func (rpcs *RPCServer) GetChordFields(args *GetChordFieldsArgs, reply *GetChordF
 type ForwardLookupArgs struct {
 	H        UHash
 	RID      int
+	Hops     int
 	ChFields ChordFields
 }
 
@@ -199,7 +216,7 @@ type ForwardLookupReply interface{}
 func (rpcs *RPCServer) ForwardLookup(args *ForwardLookupArgs, reply *ForwardLookupReply) error {
 	rpcs.checkInit()
 	source := deserializeChord(&args.ChFields)
-	return rpcs.ch.ForwardLookup(args.H, source, args.RID)
+	return rpcs.ch.ForwardLookup(args.H, source, args.RID, args.Hops)
 }
 
 // ChordNotify calls notify on local chord instance.
@@ -224,6 +241,7 @@ func (rpcs *RPCServer) isRunning() bool {
 // LookupResultArgs holds result of lookup
 type LookupResultArgs struct {
 	RID      int
+	Hops     int
 	ChFields ChordFields
 }
 
@@ -234,7 +252,7 @@ type LookupResultReply interface{}
 func (rpcs *RPCServer) ReceiveLookupResult(args *LookupResultArgs, reply *LookupResultReply) error {
 	rpcs.checkInit()
 	result := deserializeChord(&args.ChFields)
-	return rpcs.ch.receiveLookUpResult(result, args.RID)
+	return rpcs.ch.receiveLookUpResult(result, args.RID, args.Hops)
 }
 
 // UpdateFtableArgs are arguments to UpdateFtable.

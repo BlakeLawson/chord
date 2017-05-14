@@ -42,7 +42,19 @@ type Chord struct {
 	reqCount int
 
 	// Used to receive result of recursive lookup
-	respChanMap map[int]chan *Chord
+	respChanMap map[int]chan *LookupResult
+}
+
+// LookupInfo ...
+type LookupInfo struct {
+	Hops    int
+	Latency time.Duration
+}
+
+// LookupResult ...
+type LookupResult struct {
+	chordResult *Chord
+	hops        int
 }
 
 // Given index in ftable, return starting hash value.
@@ -55,12 +67,13 @@ func (ch *Chord) ftableStart(i int) UHash {
 }
 
 // recursiveLookup recursively looks up the node responsible for identifier h
-func (ch *Chord) recursiveLookup(h UHash) (*Chord, error) {
+func (ch *Chord) recursiveLookup(h UHash) (*Chord, int, error) {
 	// generate request ID, add channel to map and then forward lookup
+	hops := 0
 	ch.mu.Lock()
 	rID := ch.reqCount
 	ch.reqCount++
-	respChan := make(chan *Chord)
+	respChan := make(chan *LookupResult)
 	ch.respChanMap[rID] = respChan
 	ch.mu.Unlock()
 
@@ -71,7 +84,7 @@ func (ch *Chord) recursiveLookup(h UHash) (*Chord, error) {
 
 	go func(pwg *sync.WaitGroup) {
 		defer pwg.Done()
-		err = ch.ForwardLookup(h, ch, rID)
+		err = ch.ForwardLookup(h, ch, rID, hops)
 		if err != nil {
 			DPrintf("chord [%016x]: forward lookup failed: %s", ch.n.Hash, err)
 			respChan <- nil
@@ -79,7 +92,7 @@ func (ch *Chord) recursiveLookup(h UHash) (*Chord, error) {
 	}(&wg)
 
 	// wait for result and then delete channel
-	chRes := <-respChan
+	res := <-respChan
 	wg.Wait()
 
 	ch.mu.Lock()
@@ -88,21 +101,21 @@ func (ch *Chord) recursiveLookup(h UHash) (*Chord, error) {
 
 	// if lookup fails return err
 	if err != nil {
-		return nil, err
+		return nil, hops, err
 	}
 
-	return chRes, nil
+	return res.chordResult, res.hops, nil
 }
 
 // ForwardLookup forwards the lookup to an appropriate node closer to h. If this
 // chord instance is responsible for h, it lets the source of the lookup know.
 // TODO: should this be done in a go routine? This blocks when a request is forwarded until last node sens resul
-func (ch *Chord) ForwardLookup(h UHash, source *Chord, rID int) error {
+func (ch *Chord) ForwardLookup(h UHash, source *Chord, rID, hops int) error {
 	// base case. if this node is responsible for h, let the source of the lookup know
 	ch.mu.Lock()
 	if inRange(h, ch.predecessor.Hash, ch.n.Hash) {
 		ch.mu.Unlock()
-		source.n.RemoteSendLookupResult(rID, ch)
+		source.n.RemoteSendLookupResult(rID, hops, ch)
 		return nil
 	}
 
@@ -110,29 +123,37 @@ func (ch *Chord) ForwardLookup(h UHash, source *Chord, rID int) error {
 	dest := ch.FindClosestNode(h)
 
 	ch.mu.Unlock()
-	return dest.RemoteForwardLookup(h, source, rID)
+	return dest.RemoteForwardLookup(h, source, rID, hops)
 }
 
+// TODO: make code less error prone by changing position of similar variables
+// (e.g. rId and hops) in function heading to make it less likely for them to
+// be swappped
+
 // ReceiveLookUpResult receives lookup result and passes it to the respChanMap
-func (ch *Chord) receiveLookUpResult(result *Chord, rID int) error {
+func (ch *Chord) receiveLookUpResult(result *Chord, rID, hops int) error {
 	ch.mu.Lock()
 	lookupChan, ok := ch.respChanMap[rID]
 	ch.mu.Unlock()
 	if !ok {
 		return fmt.Errorf("chord [%s]: request %d does not exist", ch.n.String(), rID)
 	}
-	lookupChan <- result
+	lookupChan <- &LookupResult{
+		chordResult: result,
+		hops:        hops}
 	return nil
 }
 
 // iterativeLookup iteratively looks up the node responsible for identifier h
-func (ch *Chord) iterativeLookup(h UHash) (*Chord, error) {
+// and returns the number of successful hops it took to find it. Returns error on failure
+func (ch *Chord) iterativeLookup(h UHash) (*Chord, int, error) {
+	hops := 0
 	ch.mu.Lock()
 	closest := ch.FindClosestNode(h)
 
 	if ch.n.Hash == closest.Hash {
 		ch.mu.Unlock()
-		return ch, nil
+		return ch, hops, nil
 	}
 	ch.mu.Unlock()
 
@@ -140,11 +161,12 @@ func (ch *Chord) iterativeLookup(h UHash) (*Chord, error) {
 		temp, rCh, err := closest.RemoteFindClosestNode(h)
 		closest = temp
 		if err != nil {
-			return nil, fmt.Errorf("chord [%s]: RemoteFindClosestNode on %016x failed: %s",
+			return nil, 0, fmt.Errorf("chord [%s]: RemoteFindClosestNode on %016x failed: %s",
 				ch.n.String(), h, err)
 		}
+		hops++
 		if rCh != nil {
-			return rCh, nil
+			return rCh, hops, nil
 		}
 	}
 }
@@ -185,11 +207,21 @@ func (ch *Chord) FindClosestNode(h UHash) *Node {
 }
 
 // Lookup node responsible for key. Returns the node and its predecessor.
-func (ch *Chord) Lookup(h UHash) (*Chord, error) {
+func (ch *Chord) Lookup(h UHash) (*Chord, *LookupInfo, error) {
+	var chResult *Chord
+	var hops int
+	var err error
+	start := time.Now()
 	if isIterative {
-		return ch.iterativeLookup(h)
+		chResult, hops, err = ch.iterativeLookup(h)
+	} else {
+		chResult, hops, err = ch.recursiveLookup(h)
 	}
-	return ch.recursiveLookup(h)
+	latency := time.Since(start)
+	if err != nil {
+		return nil, nil, err
+	}
+	return chResult, &LookupInfo{hops, latency}, nil
 }
 
 // Notify used to tell ch that n thinks it might be ch's predecessor.
@@ -221,7 +253,7 @@ func (ch *Chord) fixFingers() error {
 
 // Pick a specific entry in the finger table and check whether it is up to date.
 func (ch *Chord) fixFinger(i int) error {
-	ftCh, err := ch.Lookup(ch.ftableStart(i))
+	ftCh, _, err := ch.Lookup(ch.ftableStart(i))
 	if err != nil {
 		return fmt.Errorf("error on %d: %s", i, err)
 	}
@@ -347,7 +379,7 @@ func (ch *Chord) UpdateFtable(n *Node, i int) error {
 
 // findPredecessor finds the predecessor for the given key.
 func (ch *Chord) findPredecessor(h UHash) (*Node, error) {
-	successor, err := ch.Lookup(h)
+	successor, _, err := ch.Lookup(h)
 	if err != nil {
 		return nil, err
 	}
@@ -415,12 +447,12 @@ func MakeChord(self *Node, existingNode *Node) (*Chord, error) {
 	ch.isRunning = true
 	ch.ftable = make([]*Node, ftableSize)
 	ch.killStabilizeChan = make(chan bool)
-	ch.respChanMap = make(map[int]chan *Chord)
+	ch.respChanMap = make(map[int]chan *LookupResult)
 
 	// Initialize slist and ftable
 	if existingNode != nil {
 		// Use existing node to initialize.
-		successor, err := existingNode.RemoteLookup(self.Hash)
+		successor, _, err := existingNode.RemoteLookup(self.Hash)
 		if err != nil {
 			return nil, err
 		}
@@ -429,7 +461,7 @@ func MakeChord(self *Node, existingNode *Node) (*Chord, error) {
 		for i := 0; i < len(successor.ftable); i++ {
 			// TODO: Initialize with successor's ftable to improve performance.
 			var ftCh *Chord
-			ftCh, err = existingNode.RemoteLookup(ch.ftableStart(i))
+			ftCh, _, err = existingNode.RemoteLookup(ch.ftableStart(i))
 			if err != nil {
 				return nil, err
 			}
