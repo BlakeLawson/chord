@@ -688,7 +688,7 @@ func (hv *Hyperviser) initServers(targetNodes int) *map[AddrPair]*serverInfo {
 // useParentLock is true, acquire hv.mu.Lock before running. Otherwise, assume
 // that lock has already been acquired.
 func (hv *Hyperviser) cleanLeader(useParentLock bool) {
-	DPrintf("hv (%): cleanLeader", hv.ap.String())
+	DPrintf("hv (%s): cleanLeader", hv.ap.String())
 	if useParentLock {
 		DPrintf("hv (%s): cleanLeader about to lock", hv.ap.String())
 		hv.mu.Lock()
@@ -1205,8 +1205,7 @@ type testConfig struct {
 
 var tests = map[TestType]testConfig{
 	LookupPerf: testConfig{
-		// phases:  []int{10, 30, 60, 90, 120, 150, 180, 200},
-		phases:  []int{5, 10},
+		phases:  []int{10, 30, 60, 90, 120, 150, 180, 200},
 		f:       lookupPerf,
 		timeout: 3 * time.Minute},
 	HelloWorld: testConfig{
@@ -1225,6 +1224,8 @@ func generateKey() chordkv.UHash {
 // chord ring. Writes data to log file in form:
 //     Lookup <ChordID> <Lookup Key> <Succeeded|Failed> <num hops> <latency>
 func lookupPerf(hv *Hyperviser) error {
+	DPrintf("hv (%s): lookupPerf", hv.ap.String())
+
 	// From Chord paper: each physical site issues 16 Chord lookups for randomly
 	// chosen keys one-by-one.
 	const numRequests = 16
@@ -1256,5 +1257,6 @@ func lookupPerf(hv *Hyperviser) error {
 func helloWorld(hv *Hyperviser) error {
 	DPrintf("hv (%s): helloWorld", hv.ap.String())
 	hv.ti.lg.Println("Hello World")
+	time.Sleep(2 * time.Second)
 	return nil
 }

@@ -40,7 +40,10 @@ func TestInitialization(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Initializing hv %s failed: %s", ap.String(), err)
 		}
-		defer hvs[i].Stop(true)
+		defer func() {
+			fmt.Printf("Test: calling hv(%s).Stop()\n", hvs[i].ap.String())
+			hvs[i].Stop(true)
+		}()
 	}
 
 	fmt.Println(" ... Passed")
@@ -62,7 +65,10 @@ func TestHelloWorld(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Initializing hv %s failed: %s", ap.String(), err)
 		}
-		defer hvs[i].Stop(true)
+		defer func() {
+			fmt.Printf("Test: calling hv(%s).Stop()\n", hvs[i].ap.String())
+			hvs[i].Stop(true)
+		}()
 	}
 
 	fmt.Println("About to call StartLeader")
@@ -90,7 +96,10 @@ func TestLookupPerf(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Initializing hv %s failed: %s", ap.String(), err)
 		}
-		defer hvs[i].Stop(true)
+		defer func() {
+			fmt.Printf("Test: calling hv(%s).Stop()\n", hvs[i].ap.String())
+			hvs[i].Stop(true)
+		}()
 	}
 
 	err = hvs[0].StartLeader(LookupPerf, leaderLogName, testLogName)

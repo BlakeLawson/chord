@@ -147,9 +147,13 @@ func (ch *Chord) receiveLookUpResult(result *Chord, rID, hops int) error {
 // iterativeLookup iteratively looks up the node responsible for identifier h
 // and returns the number of successful hops it took to find it. Returns error on failure
 func (ch *Chord) iterativeLookup(h UHash) (*Chord, int, error) {
+	DPrintf("ch [%s]: iterativeLookup (%016x): locking", ch.n.String(), h)
 	hops := 0
 	ch.mu.Lock()
+	DPrintf("ch [%s]: iterativeLookup (%016x): calling FindClosestNode", ch.n.String(), h)
 	closest := ch.FindClosestNode(h)
+	DPrintf("ch [%s]: iterativeLookup (%016x): closest = %s(%016x)",
+		ch.n.String(), h, closest.String(), closest.Hash)
 
 	if ch.n.Hash == closest.Hash {
 		ch.mu.Unlock()
@@ -158,6 +162,8 @@ func (ch *Chord) iterativeLookup(h UHash) (*Chord, int, error) {
 	ch.mu.Unlock()
 
 	for {
+		DPrintf("ch [%s]: iterativeLookup (%016x): calling RemoteFindClosestNode on %s(%016x)",
+			ch.n.String(), h, closest.String(), closest.Hash)
 		temp, rCh, err := closest.RemoteFindClosestNode(h)
 		closest = temp
 		if err != nil {
@@ -165,8 +171,8 @@ func (ch *Chord) iterativeLookup(h UHash) (*Chord, int, error) {
 				ch.n.String(), h, err)
 		}
 		hops++
-		if rCh != nil {
-			return rCh, hops, nil
+		if rCh.isRunning {
+			return &rCh, hops, nil
 		}
 	}
 }
@@ -177,13 +183,6 @@ func (ch *Chord) iterativeLookup(h UHash) (*Chord, int, error) {
 // THIS METHOD ASSUMES THAT IT IS CALLED FROM A LOCKING CONTEXT.
 // IT WOULD BE UNWISE TO CALL LOOKUP IN THIS METHOD EVEN FOR FAULT TOLERANCE
 func (ch *Chord) FindClosestNode(h UHash) Node {
-	// if ch.predecessor == nil {
-	// 	CPrintf(Red, "ch [%s]: FindClosestNode: ch.predecessor = nil", ch.n.String())
-	// }
-	// if ch.n == nil {
-	// 	CPrintf(Red, "ch: FindClosestNode: ch.n = nil")
-	// }
-
 	// If I am closest, return myself
 	if inRange(h, ch.predecessor.Hash, ch.n.Hash) {
 		return ch.n
@@ -208,6 +207,7 @@ func (ch *Chord) FindClosestNode(h UHash) Node {
 
 // Lookup node responsible for key. Returns the node and its predecessor.
 func (ch *Chord) Lookup(h UHash) (*Chord, *LookupInfo, error) {
+	DPrintf("ch [%s]: Lookup %016x", ch.n.String(), h)
 	var chResult *Chord
 	var hops int
 	var err error
@@ -250,6 +250,8 @@ func (ch *Chord) fixFingers() error {
 
 // Pick a specific entry in the finger table and check whether it is up to date.
 func (ch *Chord) fixFinger(i int) error {
+	DPrintf("ch [%s]: fixfinger: calling Lookup for %016x", ch.n.String(),
+		ch.ftableStart(i))
 	ftCh, _, err := ch.Lookup(ch.ftableStart(i))
 	if err != nil {
 		return fmt.Errorf("error on %d: %s", i, err)
@@ -268,6 +270,8 @@ func (ch *Chord) stabilizeImpl() {
 	ch.mu.Lock()
 	n := ch.ftable[0]
 	ch.mu.Unlock()
+	DPrintf("ch [%s]: stabilizeImpl: calling RemoteGetPred on %s(%016x)",
+		ch.n.String(), n.String(), n.Hash)
 	pSucc, err := n.RemoteGetPred()
 
 	ch.mu.Lock()
@@ -280,7 +284,8 @@ func (ch *Chord) stabilizeImpl() {
 
 	// If successor is dead, call (check and) updateSuccessor
 	if err != nil {
-		DPrintf("stabilize: chord [%s]: RemoteGetPred() failed: %s\n", ch.n.String(), err)
+		CPrintf(Red, "stabilize: chord [%s]: RemoteGetPred() failed: %s\n",
+			ch.n.String(), err)
 	} else {
 		ch.mu.Lock()
 		if inRange(pSucc.Hash, ch.n.Hash, ch.ftable[0].Hash) {
@@ -447,6 +452,7 @@ func (ch *Chord) GetNode() Node {
 // MakeChord creates object and join the Chord ring. If existingNode is null,
 // then this Chord node is first.
 func MakeChord(self, existingNode Node, isFirst bool) (*Chord, error) {
+	DPrintf("ch [%s]: MakeChord", self.String())
 	ch := &Chord{}
 	ch.n = self
 	ch.isRunning = true
@@ -457,12 +463,15 @@ func MakeChord(self, existingNode Node, isFirst bool) (*Chord, error) {
 	// Initialize slist and ftable
 	if !isFirst {
 		// Use existing node to initialize.
+		DPrintf("ch [%s]: MakeChord: calling lookup on self", self.String())
 		successor, _, err := existingNode.RemoteLookup(self.Hash)
 		if err != nil {
 			return nil, err
 		}
+		DPrintf("ch [%s]: MakeChord: found successor = %s", self.String(), successor.n.String())
 		ch.ftable[0] = successor.n
 		ch.predecessor = successor.predecessor
+		DPrintf("ch [%s]: MakeChord: initializing ftable", self.String())
 		for i := 0; i < len(successor.ftable); i++ {
 			// TODO: Initialize with successor's ftable to improve performance.
 			var ftCh *Chord
@@ -473,12 +482,14 @@ func MakeChord(self, existingNode Node, isFirst bool) (*Chord, error) {
 			ch.ftable[i] = ftCh.n
 		}
 
+		DPrintf("ch [%s]: notifying successor %s", self.String(), successor.n.String())
 		err = successor.n.RemoteNotify(ch.n)
 		if err != nil {
 			log.Fatalf("chord [%s]: initial notify failed: %s", ch.n.String(), err)
 		}
 
 		// Update other node's finger tables.
+		DPrintf("ch [%s]: calling updateOthers", self.String())
 		ch.updateOthers()
 	} else {
 		// No other nodes in the ring.

@@ -73,6 +73,7 @@ func MakeChordKVDbg(existingNode *Node, useLocalhost bool) (*ChordKV, error) {
 	kvs := &KVServer{}
 
 	// Get the IP at the start because there is no point continuing if this fails.
+	DPrintf("MakeChordKVDbg: getting externalIP")
 	ip, err := externalIP()
 	if err != nil {
 		return nil, fmt.Errorf("Could not find IP: %s", err)
@@ -86,6 +87,7 @@ func MakeChordKVDbg(existingNode *Node, useLocalhost bool) (*ChordKV, error) {
 		addr = ":0"
 	}
 
+	DPrintf("MakeChordKVDbg: calling startRPC")
 	rpcs, err := startRPC(ch, kvs, addr)
 	if err != nil {
 		return nil, fmt.Errorf("RPCServer initialilzation failed: %s", err)
@@ -108,6 +110,7 @@ func MakeChordKVDbg(existingNode *Node, useLocalhost bool) (*ChordKV, error) {
 	}
 
 	n := MakeNode(net.ParseIP(ip), p)
+	DPrintf("MakeChordKVDbg: calling MakeChord %s(%016x)", n.String(), n.Hash)
 	if existingNode == nil {
 		ch, err = MakeChord(n, Node{}, true)
 	} else {
