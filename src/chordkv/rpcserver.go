@@ -12,12 +12,20 @@ import (
 // RPCServer used to handle client RPC requests.
 type RPCServer struct {
 	mu           sync.Mutex
+	initBarrier  sync.RWMutex
 	ch           *Chord
 	kv           *KVServer
 	servListener net.Listener
 	baseServ     *rpc.Server
 	running      bool
 	errChan      chan error
+}
+
+// checkInit used at the start of every RPC to ensure that the server does
+// not respond to requests until the server is fully initialized.
+func (rpcs *RPCServer) checkInit() {
+	rpcs.initBarrier.RLock()
+	rpcs.initBarrier.RUnlock()
 }
 
 // KVGetArgs holds arguments to KVGet RPC.
@@ -32,6 +40,7 @@ type KVGetReply struct {
 
 // KVGet returns result of get on KVServer running on this RPCServer.
 func (rpcs *RPCServer) KVGet(args *KVGetArgs, reply *KVGetReply) error {
+	rpcs.checkInit()
 	reply.Val = rpcs.kv.Get(args.Key)
 	return nil
 }
@@ -48,6 +57,7 @@ type KVPutReply interface{}
 
 // KVPut performs put on KVServer running on this RPCServer.
 func (rpcs *RPCServer) KVPut(args *KVPutArgs, reply *KVPutReply) error {
+	rpcs.checkInit()
 	rpcs.kv.Put(args.Key, args.Val)
 	return nil
 }
@@ -80,6 +90,7 @@ type ChordLookupReply struct {
 // ChordLookup returns result of lookup performed by the Chord instance running
 // on this RPCServer.
 func (rpcs *RPCServer) ChordLookup(args *ChordLookupArgs, reply *ChordLookupReply) error {
+	rpcs.checkInit()
 	rCh, info, err := rpcs.ch.Lookup(args.H)
 	if err != nil {
 		return err
@@ -100,7 +111,8 @@ type GetPredReply struct {
 
 // GetPred returns the predecessor of the Chord instance on this server.
 func (rpcs *RPCServer) GetPred(args *GetPredArgs, reply *GetPredReply) error {
-	reply.N = *rpcs.ch.predecessor
+	rpcs.checkInit()
+	reply.N = rpcs.ch.predecessor
 	return nil
 }
 
@@ -115,8 +127,9 @@ type GetSuccReply struct {
 // GetSucc returns the Successor of the Chord instance on this server.
 // LOCKS
 func (rpcs *RPCServer) GetSucc(args *GetSuccArgs, reply *GetSuccReply) error {
+	rpcs.checkInit()
 	rpcs.mu.Lock()
-	reply.N = *rpcs.ch.ftable[0]
+	reply.N = rpcs.ch.ftable[0]
 	rpcs.mu.Unlock()
 	return nil
 }
@@ -128,21 +141,24 @@ type FindClosestArgs struct {
 
 // FindClosestReply holds reply to FindClosestReply.
 type FindClosestReply struct {
+	Done     bool
 	N        Node
-	ChFields *ChordFields
+	ChFields ChordFields
 }
 
 // FindClosestNode finds the closest node to a hash from the Chord instance on this server.
 func (rpcs *RPCServer) FindClosestNode(args *FindClosestArgs, reply *FindClosestReply) error {
-	reply.ChFields = nil
+	rpcs.checkInit()
+	reply.Done = false
 
 	// TODO: Not happy about doing locking here
 	rpcs.ch.mu.Lock()
 	tempN := rpcs.ch.FindClosestNode(args.H)
 	rpcs.ch.mu.Unlock()
-	reply.N = *tempN
+	reply.N = tempN
 	if rpcs.ch.n.Hash == reply.N.Hash {
-		reply.ChFields = serializeChord(rpcs.ch)
+		reply.Done = true
+		reply.ChFields = *serializeChord(rpcs.ch)
 	}
 	return nil
 }
@@ -150,12 +166,14 @@ func (rpcs *RPCServer) FindClosestNode(args *FindClosestArgs, reply *FindClosest
 // ChordFields holds values for building a chord instance.
 // It is used to make passing around chord isntance information easier
 type ChordFields struct {
-	N           *Node
-	Predecessor *Node
-	FTable      []*Node
+	N           Node
+	Predecessor Node
+	FTable      []Node
 }
 
 func serializeChord(ch *Chord) *ChordFields {
+	ch.mu.Lock()
+	defer ch.mu.Unlock()
 	return &ChordFields{
 		N:           ch.n,
 		Predecessor: ch.predecessor,
@@ -182,6 +200,7 @@ type GetChordFieldsReply ChordFields
 
 // GetChordFields ...
 func (rpcs *RPCServer) GetChordFields(args *GetChordFieldsArgs, reply *GetChordFieldsReply) error {
+	rpcs.checkInit()
 	*reply = GetChordFieldsReply(*serializeChord(rpcs.ch))
 	return nil
 }
@@ -199,17 +218,20 @@ type ForwardLookupReply interface{}
 
 // ForwardLookup finds the closest node to a hash from the Chord instance on this server.
 func (rpcs *RPCServer) ForwardLookup(args *ForwardLookupArgs, reply *ForwardLookupReply) error {
+	rpcs.checkInit()
 	source := deserializeChord(&args.ChFields)
 	return rpcs.ch.ForwardLookup(args.H, source, args.RID, args.Hops)
 }
 
 // ChordNotify calls notify on local chord instance.
 func (rpcs *RPCServer) ChordNotify(args *Node, reply *struct{}) error {
-	return rpcs.ch.Notify(args)
+	rpcs.checkInit()
+	return rpcs.ch.Notify(*args)
 }
 
 // Ping used for testing
 func (rpcs *RPCServer) Ping(args struct{}, reply *struct{}) error {
+	rpcs.checkInit()
 	return nil
 }
 
@@ -232,18 +254,20 @@ type LookupResultReply interface{}
 
 // ReceiveLookupResult receives the result of a recursive lookup
 func (rpcs *RPCServer) ReceiveLookupResult(args *LookupResultArgs, reply *LookupResultReply) error {
+	rpcs.checkInit()
 	result := deserializeChord(&args.ChFields)
 	return rpcs.ch.receiveLookUpResult(result, args.RID, args.Hops)
 }
 
 // UpdateFtableArgs are arguments to UpdateFtable.
 type UpdateFtableArgs struct {
-	N *Node
+	N Node
 	I int
 }
 
 // UpdateFtable is RPC endpoint for chord.UpdateFtable().
 func (rpcs *RPCServer) UpdateFtable(args *UpdateFtableArgs, reply *struct{}) error {
+	rpcs.checkInit()
 	return rpcs.ch.UpdateFtable(args.N, args.I)
 }
 
@@ -309,4 +333,9 @@ func (rpcs *RPCServer) End() error {
 	}
 
 	return nil
+}
+
+// GetAddr returns the address the servers is listening on.
+func (rpcs *RPCServer) GetAddr() net.Addr {
+	return rpcs.servListener.Addr()
 }

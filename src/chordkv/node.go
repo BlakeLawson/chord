@@ -15,12 +15,12 @@ type Node struct {
 }
 
 // MakeNode initializes a node. Return nil to indicate error.
-func MakeNode(addr net.IP, port int) *Node {
+func MakeNode(addr net.IP, port int) Node {
 	if addr == nil || port <= 0 {
-		return nil
+		DPrintf("MakeNode: Invalid arguments addr:%v port:%d", addr, port)
 	}
 
-	n := &Node{addr, port, 0}
+	n := Node{addr, port, 0}
 	n.Hash = Hash(n.String())
 	return n
 }
