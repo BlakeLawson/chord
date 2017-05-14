@@ -286,6 +286,10 @@ func (hv *Hyperviser) PrepareTest(args *TestArgs, reply *struct{}) error {
 	hv.ti.lg = log.New(f, hv.ap.String()+" ", log.LstdFlags|log.LUTC)
 	hv.ti.tNum++
 
+	// Add random delay before start to avoid overloading leader
+	r := rand.Intn(1000)
+	time.Sleep(time.Millisecond * time.Duration(r))
+
 	// Prepare the test.
 	go hv.initTest(args.NumChords)
 
