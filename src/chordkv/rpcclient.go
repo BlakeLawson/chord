@@ -9,13 +9,8 @@ import (
 	"time"
 )
 
-// TODO: revisit numbers before deploying
-const (
-	pingTimeoutDuration time.Duration = 1 * time.Second
-)
-
 func (n *Node) openConn() (*rpc.Client, error) {
-	conn, err := net.DialTimeout("tcp", n.String(), 5*time.Second)
+	conn, err := net.DialTimeout("tcp", n.String(), 500*time.Millisecond)
 	if err != nil {
 		return nil, err
 	}
@@ -232,18 +227,8 @@ func (n *Node) RemotePing() error {
 	}
 	defer client.Close()
 
-	var reply struct{}
-
-	errChan := make(chan error)
-
-	go func() { errChan <- client.Call("RPCServer.Ping", reply, &reply) }()
-
-	select {
-	case err := <-errChan:
-		return err
-	case <-time.After(pingTimeoutDuration):
-		return fmt.Errorf("Ping Timed out after %v", pingTimeoutDuration)
-	}
+	var args, reply struct{}
+	return client.Call("RPCServer.Ping", &args, &reply)
 }
 
 // RemoteNotify calls Notify on n.
