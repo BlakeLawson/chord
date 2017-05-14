@@ -73,7 +73,13 @@ func main() {
 	}
 
 	// TODO: More robust checks?
-	if testType == "" || password == "" || testLogFile == "" {
+	if password == "" {
+		fmt.Println("Invalid usage")
+		printFlagErrorMessage()
+		return
+	}
+
+	if isLeader && (testType == "" || leaderLogFile == "" || testLogFile == "") {
 		fmt.Println("Invalid usage")
 		printFlagErrorMessage()
 		return
