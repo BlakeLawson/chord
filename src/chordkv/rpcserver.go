@@ -91,6 +91,7 @@ type ChordLookupReply struct {
 // on this RPCServer.
 func (rpcs *RPCServer) ChordLookup(args *ChordLookupArgs, reply *ChordLookupReply) error {
 	rpcs.checkInit()
+	DPrintf("ch [%s]: ChordLookup for %016x", rpcs.ch.n.String(), args.H)
 	rCh, info, err := rpcs.ch.Lookup(args.H)
 	if err != nil {
 		return err
@@ -151,11 +152,17 @@ func (rpcs *RPCServer) FindClosestNode(args *FindClosestArgs, reply *FindClosest
 	rpcs.checkInit()
 	reply.Done = false
 
+	DPrintf("ch [%s]: FindClosestNode (%016x)", rpcs.ch.n.String(), args.H)
+
 	// TODO: Not happy about doing locking here
 	rpcs.ch.mu.Lock()
 	tempN := rpcs.ch.FindClosestNode(args.H)
 	rpcs.ch.mu.Unlock()
 	reply.N = tempN
+
+	DPrintf("ch [%s]: FindClosestNode (%016x): secceeded: %s",
+		rpcs.ch.n.String(), args.H, tempN.String())
+
 	if rpcs.ch.n.Hash == reply.N.Hash {
 		reply.Done = true
 		reply.ChFields = *serializeChord(rpcs.ch)
@@ -189,6 +196,7 @@ func deserializeChord(chFields *ChordFields) *Chord {
 		n:           chFields.N,
 		predecessor: chFields.Predecessor,
 		ftable:      chFields.FTable,
+		isRunning:   true,
 	}
 }
 

@@ -71,6 +71,7 @@ func (n *Node) RemoteKVSize() (int, error) {
 
 // RemoteLookup performs Lookup RPC on remote node.
 func (n *Node) RemoteLookup(h UHash) (*Chord, *LookupInfo, error) {
+	DPrintf("Remote lookup %s -> (%016x)", n.String(), h)
 	client, err := n.openConn()
 	if err != nil {
 		return nil, nil, err
@@ -126,24 +127,31 @@ func (n *Node) RemoteGetSucc() (*Node, error) {
 // Returns the closest known Node and the Chord instance for that node if the
 // Node is the actual Node that is responsible for h. If the returned Node is
 // not responsible for h then the Chord return is nil.
-func (n *Node) RemoteFindClosestNode(h UHash) (Node, *Chord, error) {
+func (n *Node) RemoteFindClosestNode(h UHash) (Node, Chord, error) {
+	DPrintf("ch [%s]: RemoteFindClosestNode (%016x): opening connection", n.String(), h)
 	client, err := n.openConn()
 	if err != nil {
-		return Node{}, nil, err
+		return Node{}, Chord{}, err
 	}
 	defer client.Close()
 
 	args := &FindClosestArgs{h}
 	var reply FindClosestReply
+	DPrintf("ch [%s]: RemoteFindClosestNode (%016x): making RPC", n.String(), h)
 	err = client.Call("RPCServer.FindClosestNode", args, &reply)
 	if err != nil {
-		return Node{}, nil, err
+		DPrintf("ch [%s]: RemoteFindClosest (%016x): RPC failed: %s", n.String(), h, err)
+		return Node{}, Chord{}, err
 	}
 
+	DPrintf("ch [%s]: RemoteFindClosest (%016x): RPC succeeded: "+
+		"{Done:%v, N:%s, Ch:%s}", n.String(), h, reply.Done,
+		reply.N.String(), reply.ChFields.N.String())
+
 	if reply.Done {
-		return reply.N, deserializeChord(&reply.ChFields), nil
+		return reply.N, *deserializeChord(&reply.ChFields), nil
 	}
-	return reply.N, nil, nil
+	return reply.N, Chord{}, nil
 }
 
 // RemoteForwardLookup forwards source's lookup on h to dest
