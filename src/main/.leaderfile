@@ -1,41 +1,17 @@
-127.0.0.1:8888 2017/05/14 12:05:07 Starting HelloWorld round 0
-127.0.0.1:8888 2017/05/14 12:05:08 Preparing for test
-127.0.0.1:8888 2017/05/14 12:05:08 Waiting for ready
-127.0.0.1:8888 2017/05/14 12:05:08 Executing test
-127.0.0.1:8888 2017/05/14 12:05:08 Waiting for test to finish
-127.0.0.1:8888 2017/05/14 12:05:08 Test 0 Succeeded
-127.0.0.1:8888 2017/05/14 12:05:08 Starting HelloWorld round 1
-127.0.0.1:8888 2017/05/14 12:05:09 Preparing for test
-127.0.0.1:8888 2017/05/14 12:05:09 Waiting for ready
-127.0.0.1:8888 2017/05/14 12:05:10 Executing test
-127.0.0.1:8888 2017/05/14 12:05:10 Waiting for test to finish
-127.0.0.1:8888 2017/05/14 12:05:10 Test 1 Succeeded
-127.0.0.1:8888 2017/05/14 12:05:10 Starting HelloWorld round 2
-127.0.0.1:8888 2017/05/14 12:05:11 Preparing for test
-127.0.0.1:8888 2017/05/14 12:05:11 Waiting for ready
-127.0.0.1:8888 2017/05/14 12:05:14 Executing test
-127.0.0.1:8888 2017/05/14 12:05:14 Waiting for test to finish
-127.0.0.1:8888 2017/05/14 12:05:14 Test 2 Succeeded
-127.0.0.1:8888 2017/05/14 12:05:14 Starting HelloWorld round 3
-127.0.0.1:8888 2017/05/14 12:05:15 Preparing for test
-127.0.0.1:8888 2017/05/14 12:05:15 Waiting for ready
-127.0.0.1:8888 2017/05/14 12:05:22 Executing test
-127.0.0.1:8888 2017/05/14 12:05:22 Waiting for test to finish
-127.0.0.1:8888 2017/05/14 12:05:22 Test 3 Succeeded
-127.0.0.1:8888 2017/05/14 12:05:22 Starting HelloWorld round 4
-127.0.0.1:8888 2017/05/14 12:05:23 Preparing for test
-127.0.0.1:8888 2017/05/14 12:05:23 Waiting for ready
-127.0.0.1:8888 2017/05/14 12:05:34 Executing test
-127.0.0.1:8888 2017/05/14 12:05:34 Waiting for test to finish
-127.0.0.1:8888 2017/05/14 12:05:34 Test 4 Succeeded
-127.0.0.1:8888 2017/05/14 12:05:34 Starting HelloWorld round 5
-127.0.0.1:8888 2017/05/14 12:05:35 Preparing for test
-127.0.0.1:8888 2017/05/14 12:05:35 Waiting for ready
-127.0.0.1:8888 2017/05/14 12:05:58 Executing test
-127.0.0.1:8888 2017/05/14 12:05:58 Waiting for test to finish
-127.0.0.1:8888 2017/05/14 12:05:58 Test 5 Succeeded
-127.0.0.1:8888 2017/05/14 12:05:58 Starting HelloWorld round 6
-127.0.0.1:8888 2017/05/14 12:05:59 Preparing for test
-127.0.0.1:8888 2017/05/14 12:05:59 Waiting for ready
-127.0.0.1:8888 2017/05/14 12:06:37 prepareLeader: initChord failed: Chord initialization failed: dial tcp 10.8.57.184:52536: connect: can't assign requested address
-127.0.0.1:8888 2017/05/14 12:06:59 Timeout before servers ready
+127.0.0.1:8888 2017/05/14 12:17:04 Starting HelloWorld round 0
+127.0.0.1:8888 2017/05/14 12:17:05 Preparing for test
+127.0.0.1:8888 2017/05/14 12:17:05 Waiting for ready
+127.0.0.1:8888 2017/05/14 12:17:05 Executing test
+127.0.0.1:8888 2017/05/14 12:17:05 Waiting for test to finish
+127.0.0.1:8888 2017/05/14 12:17:07 Test 0 Succeeded
+127.0.0.1:8888 2017/05/14 12:17:07 Starting HelloWorld round 1
+127.0.0.1:8888 2017/05/14 12:17:08 Preparing for test
+127.0.0.1:8888 2017/05/14 12:17:08 Waiting for ready
+127.0.0.1:8888 2017/05/14 12:17:09 Executing test
+127.0.0.1:8888 2017/05/14 12:17:09 Waiting for test to finish
+127.0.0.1:8888 2017/05/14 12:17:11 Test 1 Succeeded
+127.0.0.1:8888 2017/05/14 12:17:11 Starting HelloWorld round 2
+127.0.0.1:8888 2017/05/14 12:17:12 Preparing for test
+127.0.0.1:8888 2017/05/14 12:17:12 Waiting for ready
+127.0.0.1:8888 2017/05/14 12:17:15 Executing test
+127.0.0.1:8888 2017/05/14 12:17:15 Waiting for test to finish
