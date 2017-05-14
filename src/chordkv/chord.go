@@ -27,13 +27,13 @@ type Chord struct {
 	isRunning bool
 
 	// Network information about this Chord instance.
-	n *Node
+	n Node
 
 	// Predecessor in chord ring
-	predecessor *Node
+	predecessor Node
 
 	// finger table
-	ftable []*Node
+	ftable []Node
 
 	// Channels used to terminate instance's stabilize threads.
 	killStabilizeChan chan bool
@@ -176,13 +176,13 @@ func (ch *Chord) iterativeLookup(h UHash) (*Chord, int, error) {
 // Returns an error if every node it knows close to the identifier h has failed
 // THIS METHOD ASSUMES THAT IT IS CALLED FROM A LOCKING CONTEXT.
 // IT WOULD BE UNWISE TO CALL LOOKUP IN THIS METHOD EVEN FOR FAULT TOLERANCE
-func (ch *Chord) FindClosestNode(h UHash) *Node {
-	if ch.predecessor == nil {
-		CPrintf(Red, "ch [%s]: FindClosestNode: ch.predecessor = nil", ch.n.String())
-	}
-	if ch.n == nil {
-		CPrintf(Red, "ch: FindClosestNode: ch.n = nil")
-	}
+func (ch *Chord) FindClosestNode(h UHash) Node {
+	// if ch.predecessor == nil {
+	// 	CPrintf(Red, "ch [%s]: FindClosestNode: ch.predecessor = nil", ch.n.String())
+	// }
+	// if ch.n == nil {
+	// 	CPrintf(Red, "ch: FindClosestNode: ch.n = nil")
+	// }
 
 	// If I am closest, return myself
 	if inRange(h, ch.predecessor.Hash, ch.n.Hash) {
@@ -225,10 +225,7 @@ func (ch *Chord) Lookup(h UHash) (*Chord, *LookupInfo, error) {
 }
 
 // Notify used to tell ch that n thinks it might be ch's predecessor.
-func (ch *Chord) Notify(n *Node) error {
-	if n == nil {
-		return fmt.Errorf("chord [%s]: Notify called with nil node", ch.n.String())
-	}
+func (ch *Chord) Notify(n Node) error {
 	ch.mu.Lock()
 	defer ch.mu.Unlock()
 
@@ -268,10 +265,19 @@ func (ch *Chord) fixFinger(i int) error {
 // TODO: Add fault tolerance with successor list.
 // TODO: Double check concurrency controls here.
 func (ch *Chord) stabilizeImpl() {
-	pSucc, err := ch.ftable[0].RemoteGetPred()
-	if !ch.checkRunning() {
+	ch.mu.Lock()
+	n := ch.ftable[0]
+	ch.mu.Unlock()
+	pSucc, err := n.RemoteGetPred()
+
+	ch.mu.Lock()
+	if !ch.isRunning || ch.ftable[0].Hash != n.Hash {
+		// Something changed.
+		ch.mu.Unlock()
 		return
 	}
+	ch.mu.Unlock()
+
 	// If successor is dead, call (check and) updateSuccessor
 	if err != nil {
 		DPrintf("stabilize: chord [%s]: RemoteGetPred() failed: %s\n", ch.n.String(), err)
@@ -348,10 +354,7 @@ func inRange(key UHash, min UHash, max UHash) bool {
 
 // UpdateFtable is an RPC endpoint called by other chord nodes that think they
 // may belong in ch's ftable at entry i.
-func (ch *Chord) UpdateFtable(n *Node, i int) error {
-	if n == nil {
-		return fmt.Errorf("UpdateFtable: nil node")
-	}
+func (ch *Chord) UpdateFtable(n Node, i int) error {
 	if i < 0 || i >= ftableSize {
 		return fmt.Errorf("UpdateFtable: Invalid ftable index %d", i)
 	}
@@ -380,10 +383,10 @@ func (ch *Chord) UpdateFtable(n *Node, i int) error {
 }
 
 // findPredecessor finds the predecessor for the given key.
-func (ch *Chord) findPredecessor(h UHash) (*Node, error) {
+func (ch *Chord) findPredecessor(h UHash) (Node, error) {
 	successor, _, err := ch.Lookup(h)
 	if err != nil {
-		return nil, err
+		return Node{}, err
 	}
 	return successor.predecessor, nil
 }
@@ -438,21 +441,21 @@ func (ch *Chord) updateOthers() {
 
 // GetNode returns ch's network information.
 func (ch *Chord) GetNode() Node {
-	return *ch.n
+	return ch.n
 }
 
 // MakeChord creates object and join the Chord ring. If existingNode is null,
 // then this Chord node is first.
-func MakeChord(self *Node, existingNode *Node) (*Chord, error) {
+func MakeChord(self, existingNode Node, isFirst bool) (*Chord, error) {
 	ch := &Chord{}
 	ch.n = self
 	ch.isRunning = true
-	ch.ftable = make([]*Node, ftableSize)
+	ch.ftable = make([]Node, ftableSize)
 	ch.killStabilizeChan = make(chan bool)
 	ch.respChanMap = make(map[int]chan *LookupResult)
 
 	// Initialize slist and ftable
-	if existingNode != nil {
+	if !isFirst {
 		// Use existing node to initialize.
 		successor, _, err := existingNode.RemoteLookup(self.Hash)
 		if err != nil {

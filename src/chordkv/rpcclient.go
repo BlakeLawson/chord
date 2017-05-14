@@ -88,10 +88,10 @@ func (n *Node) RemoteLookup(h UHash) (*Chord, *LookupInfo, error) {
 }
 
 // RemoteGetPred returns the predecessor of the specified node.
-func (n *Node) RemoteGetPred() (*Node, error) {
+func (n *Node) RemoteGetPred() (Node, error) {
 	client, err := n.openConn()
 	if err != nil {
-		return nil, err
+		return Node{}, err
 	}
 	defer client.Close()
 
@@ -99,9 +99,9 @@ func (n *Node) RemoteGetPred() (*Node, error) {
 	var reply GetPredReply
 	err = client.Call("RPCServer.GetPred", args, &reply)
 	if err != nil {
-		return nil, err
+		return Node{}, err
 	}
-	return &reply.N, nil
+	return reply.N, nil
 }
 
 // RemoteGetSucc returns the successor of the specified node.
@@ -126,10 +126,10 @@ func (n *Node) RemoteGetSucc() (*Node, error) {
 // Returns the closest known Node and the Chord instance for that node if the
 // Node is the actual Node that is responsible for h. If the returned Node is
 // not responsible for h then the Chord return is nil.
-func (n *Node) RemoteFindClosestNode(h UHash) (*Node, *Chord, error) {
+func (n *Node) RemoteFindClosestNode(h UHash) (Node, *Chord, error) {
 	client, err := n.openConn()
 	if err != nil {
-		return nil, nil, err
+		return Node{}, nil, err
 	}
 	defer client.Close()
 
@@ -137,10 +137,13 @@ func (n *Node) RemoteFindClosestNode(h UHash) (*Node, *Chord, error) {
 	var reply FindClosestReply
 	err = client.Call("RPCServer.FindClosestNode", args, &reply)
 	if err != nil {
-		return nil, nil, err
+		return Node{}, nil, err
 	}
 
-	return &reply.N, deserializeChord(reply.ChFields), nil
+	if reply.Done {
+		return reply.N, deserializeChord(&reply.ChFields), nil
+	}
+	return reply.N, nil, nil
 }
 
 // RemoteForwardLookup forwards source's lookup on h to dest
@@ -236,7 +239,7 @@ func (n *Node) RemotePing() error {
 }
 
 // RemoteNotify calls Notify on n.
-func (n *Node) RemoteNotify(pred *Node) error {
+func (n *Node) RemoteNotify(pred Node) error {
 	client, err := n.openConn()
 	if err != nil {
 		return err
@@ -248,7 +251,7 @@ func (n *Node) RemoteNotify(pred *Node) error {
 }
 
 // RemoteUpdateFtable calls UpdateFtable on n.
-func (n *Node) RemoteUpdateFtable(m *Node, i int) error {
+func (n *Node) RemoteUpdateFtable(m Node, i int) error {
 	client, err := n.openConn()
 	if err != nil {
 		return err

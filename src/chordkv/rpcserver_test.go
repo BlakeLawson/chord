@@ -103,7 +103,7 @@ func TestRPCServerMultiple(t *testing.T) {
 	basePort := 8890
 	ch := &Chord{}
 	kv := &KVServer{}
-	nodes := make([]*Node, N)
+	nodes := make([]Node, N)
 	rpcss := make([]*RPCServer, N)
 	serverDones := make([]chan bool, N)
 	var err error

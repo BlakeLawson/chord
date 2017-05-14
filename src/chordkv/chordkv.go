@@ -108,7 +108,11 @@ func MakeChordKVDbg(existingNode *Node, useLocalhost bool) (*ChordKV, error) {
 	}
 
 	n := MakeNode(net.ParseIP(ip), p)
-	ch, err = MakeChord(n, existingNode)
+	if existingNode == nil {
+		ch, err = MakeChord(n, Node{}, true)
+	} else {
+		ch, err = MakeChord(n, *existingNode, false)
+	}
 	if err != nil {
 		rpcs.End()
 		return nil, fmt.Errorf("Chord initialization failed: %s", err)

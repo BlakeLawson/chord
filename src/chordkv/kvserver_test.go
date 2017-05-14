@@ -4,13 +4,21 @@ package chordkv
 
 import (
 	"fmt"
+	"net"
+	"port"
 	"testing"
 )
 
 func TestKVServerBasic(t *testing.T) {
 	fmt.Println("Test: Basic KVServer ops ...")
 
-	ch, err := MakeChord(nil, nil)
+	p, err := port.New()
+	if err != nil {
+		t.Fatalf("port.New failed: %s", err)
+	}
+
+	n := MakeNode(net.ParseIP("127.0.0.1"), p)
+	ch, err := MakeChord(n, Node{}, true)
 	if err != nil {
 		t.Fatalf("Chord initialziation failed")
 	}

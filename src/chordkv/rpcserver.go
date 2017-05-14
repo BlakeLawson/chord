@@ -112,7 +112,7 @@ type GetPredReply struct {
 // GetPred returns the predecessor of the Chord instance on this server.
 func (rpcs *RPCServer) GetPred(args *GetPredArgs, reply *GetPredReply) error {
 	rpcs.checkInit()
-	reply.N = *rpcs.ch.predecessor
+	reply.N = rpcs.ch.predecessor
 	return nil
 }
 
@@ -129,7 +129,7 @@ type GetSuccReply struct {
 func (rpcs *RPCServer) GetSucc(args *GetSuccArgs, reply *GetSuccReply) error {
 	rpcs.checkInit()
 	rpcs.mu.Lock()
-	reply.N = *rpcs.ch.ftable[0]
+	reply.N = rpcs.ch.ftable[0]
 	rpcs.mu.Unlock()
 	return nil
 }
@@ -141,22 +141,24 @@ type FindClosestArgs struct {
 
 // FindClosestReply holds reply to FindClosestReply.
 type FindClosestReply struct {
+	Done     bool
 	N        Node
-	ChFields *ChordFields
+	ChFields ChordFields
 }
 
 // FindClosestNode finds the closest node to a hash from the Chord instance on this server.
 func (rpcs *RPCServer) FindClosestNode(args *FindClosestArgs, reply *FindClosestReply) error {
 	rpcs.checkInit()
-	reply.ChFields = nil
+	reply.Done = false
 
 	// TODO: Not happy about doing locking here
 	rpcs.ch.mu.Lock()
 	tempN := rpcs.ch.FindClosestNode(args.H)
 	rpcs.ch.mu.Unlock()
-	reply.N = *tempN
+	reply.N = tempN
 	if rpcs.ch.n.Hash == reply.N.Hash {
-		reply.ChFields = serializeChord(rpcs.ch)
+		reply.Done = true
+		reply.ChFields = *serializeChord(rpcs.ch)
 	}
 	return nil
 }
@@ -164,12 +166,14 @@ func (rpcs *RPCServer) FindClosestNode(args *FindClosestArgs, reply *FindClosest
 // ChordFields holds values for building a chord instance.
 // It is used to make passing around chord isntance information easier
 type ChordFields struct {
-	N           *Node
-	Predecessor *Node
-	FTable      []*Node
+	N           Node
+	Predecessor Node
+	FTable      []Node
 }
 
 func serializeChord(ch *Chord) *ChordFields {
+	ch.mu.Lock()
+	defer ch.mu.Unlock()
 	return &ChordFields{
 		N:           ch.n,
 		Predecessor: ch.predecessor,
@@ -222,7 +226,7 @@ func (rpcs *RPCServer) ForwardLookup(args *ForwardLookupArgs, reply *ForwardLook
 // ChordNotify calls notify on local chord instance.
 func (rpcs *RPCServer) ChordNotify(args *Node, reply *struct{}) error {
 	rpcs.checkInit()
-	return rpcs.ch.Notify(args)
+	return rpcs.ch.Notify(*args)
 }
 
 // Ping used for testing
@@ -257,7 +261,7 @@ func (rpcs *RPCServer) ReceiveLookupResult(args *LookupResultArgs, reply *Lookup
 
 // UpdateFtableArgs are arguments to UpdateFtable.
 type UpdateFtableArgs struct {
-	N *Node
+	N Node
 	I int
 }
 

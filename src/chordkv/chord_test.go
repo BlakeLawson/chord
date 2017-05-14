@@ -65,7 +65,7 @@ func initializeChordRing(size int) error {
 
 	// First node
 	n := MakeNode(localhost, basePort)
-	chordInstances[0], err = MakeChord(n, nil)
+	chordInstances[0], err = MakeChord(n, Node{}, true)
 	if err != nil {
 		return fmt.Errorf("Chord[0] initialization failed: %s", err)
 	}
@@ -86,7 +86,7 @@ func initializeChordRing(size int) error {
 	// Initialization phase.
 	for i := 1; i < size; i++ {
 		n = MakeNode(localhost, basePort+i)
-		chordInstances[i], err = MakeChord(n, chordInstances[0].n)
+		chordInstances[i], err = MakeChord(n, chordInstances[0].n, false)
 		if err != nil {
 			return fmt.Errorf("Chord[%d] initiailzation failed: %s", i, err)
 		}
@@ -204,11 +204,11 @@ func makeSimpleChord() *Chord {
 	localhost := net.ParseIP("127.0.0.1")
 	ch := &Chord{}
 	ch.n = MakeNode(localhost, 8888)
-	ch.predecessor = &Node{localhost, 0, ch.n.Hash - 1000}
-	ch.ftable = make([]*Node, ftableSize)
+	ch.predecessor = Node{localhost, 0, ch.n.Hash - 1000}
+	ch.ftable = make([]Node, ftableSize)
 	// Initialize lists
 	for i := 0; i < len(ch.ftable); i++ {
-		ch.ftable[i] = &Node{localhost, 0, ch.ftableStart(i)}
+		ch.ftable[i] = Node{localhost, 0, ch.ftableStart(i)}
 	}
 
 	return ch
@@ -319,10 +319,10 @@ func TestChordFindClosestNodeUnit(t *testing.T) {
 
 // Initializes a chord instance from a node, all fields are initialized
 // ftable, slist and predecessor need to be updated with proper values elsewhere
-func initChordFromNode(n *Node) *Chord {
+func initChordFromNode(n Node) *Chord {
 	ch := &Chord{}
 	ch.n = n
-	ch.ftable = make([]*Node, ftableSize)
+	ch.ftable = make([]Node, ftableSize)
 	ch.isRunning = false
 	ch.killStabilizeChan = nil
 	ch.respChanMap = make(map[int]chan *LookupResult)
