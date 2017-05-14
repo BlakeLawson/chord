@@ -8,6 +8,9 @@
 *.test
 testTool
 
+# Test files
+.testfile*
+
 # Possibly atom files
 github.com
 golang.org
