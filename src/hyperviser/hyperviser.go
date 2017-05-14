@@ -877,7 +877,7 @@ func (hv *Hyperviser) StartLeader(testType TestType, leaderLog, testLog string) 
 	// TODO: should rewrite to reuse existing chord instances rather than
 	// tearing down every time.
 	for batchNum, batchSize := range tests[testType].phases {
-		logName := fmt.Sprintf("%s%d", testLog, batchNum)
+		logName := fmt.Sprintf("%s%d", testLog, batchSize)
 		f, err = os.Create(hv.logDir + logName)
 		if err != nil {
 			return fmt.Errorf("Creating test log failed: %s", err)
