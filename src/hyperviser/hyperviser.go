@@ -22,7 +22,7 @@ const defaultPort = 8888
 
 // Maximum amount of time to wait between leader calling testConfig and
 // receiving the call to start the test.
-const readyTimeout time.Duration = 2 * time.Minute
+const readyTimeout time.Duration = 5 * time.Minute
 
 // Maximum amount of time to wait for RPC to return.
 const rpcTimeout time.Duration = 20 * time.Second
@@ -948,7 +948,7 @@ func (hv *Hyperviser) StartLeader(testType TestType, leaderLog, testLog string) 
 			hv.ls.readyWg.Wait()
 			waitChan <- true
 		}()
-		timeout := time.Minute + time.Second*time.Duration(info.targetNumChs)
+		timeout := 30 * time.Second*time.Duration(info.targetNumChs)
 		DPrintf("timeout: %d", timeout/time.Second)
 		select {
 		case <-time.After(timeout):
