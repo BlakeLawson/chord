@@ -61,6 +61,7 @@ var serverAddrs = map[AddrPair]bool{}
 
 type testInfo struct {
 	tNum      int
+	tSize     int
 	isTesting bool
 	isRunning bool
 	isReady   bool
@@ -259,6 +260,7 @@ func (hv *Hyperviser) PrepareTest(args *TestArgs, reply *struct{}) error {
 
 	hv.ti.isTesting = true
 	hv.ti.isLeader = false
+	hv.ti.tSize = args.NumChords
 	hv.ti.leader = args.AA.AP
 	hv.ti.testType = args.TType
 	hv.ti.baseCh = args.BaseChordNode
@@ -770,6 +772,7 @@ func (hv *Hyperviser) prepareLeader() {
 		}
 	}
 
+	hv.ti.tNum = info.targetNumChs
 	info.numChs = info.targetNumChs
 	info.status = readySt
 	CPrintf(Red, "hv (%s): prepareLeader Done", hv.ap.String())
@@ -1194,11 +1197,10 @@ func (hv *Hyperviser) Kill(args *AuthArgs, reply *struct{}) error {
 // TestType indicates the test that should be performed.
 type TestType string
 
-// TODO: More test names...
 const (
-	// LookupPerf measures lookup latency as function of nodes in the network.
 	LookupPerf TestType = "LookupPerf"
 	HelloWorld TestType = "HelloWorld"
+	KeyDist    TestType = "KeyDist"
 )
 
 type testConfig struct {
@@ -1216,6 +1218,10 @@ var tests = map[TestType]testConfig{
 		phases:  []int{1, 2, 4, 7, 10, 20, 50},
 		f:       helloWorld,
 		timeout: 10 * time.Second},
+	KeyDist: testConfig{
+		phases:  []int{10, 30, 60, 90, 120, 150, 180, 200},
+		f:       keyDist,
+		timeout: 4 * time.Minute},
 }
 
 // Return random Chord key.
@@ -1262,5 +1268,11 @@ func helloWorld(hv *Hyperviser) error {
 	DPrintf("hv (%s): helloWorld", hv.ap.String())
 	hv.ti.lg.Println("Hello World")
 	time.Sleep(2 * time.Second)
+	return nil
+}
+
+// keyDist measures the distribution of keys in the chord network as a function
+// of network size.
+func keyDist(hv *Hyperviser) error {
 	return nil
 }
