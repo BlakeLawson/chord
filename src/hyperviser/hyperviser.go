@@ -130,6 +130,7 @@ func callRPC(fname rpcEndpoint, ap AddrPair, timeout time.Duration,
 // Clear all information associated with any test that could be running. THIS
 // METHOD ASSUMES THAT IT IS CALLED FROM A LOCKING CONTEXT.
 func (ti *testInfo) clear() {
+	DPrintf("in ti.clear()")
 	ti.isTesting = false
 	ti.isRunning = false
 	ti.isReady = false
@@ -203,6 +204,7 @@ func (hv *Hyperviser) validate(aa *AuthArgs) error {
 // Shut down all of the chord instances associated with the current test. THiS
 // METHOD ASSUMES THAT IT IS CALLED FROM A LOCKING CONTEXT.
 func (hv *Hyperviser) closeChords() {
+	DPrintf("hv (%s): closeChords", hv.ap.String())
 	if hv.chkvs == nil {
 		return
 	}
@@ -282,12 +284,15 @@ func (hv *Hyperviser) PrepareTest(args *TestArgs, reply *struct{}) error {
 // indicate whether stopTest needs to acquire locks. If useLocks set to false
 // this method assumes that the calling function acquired appropriate locks.
 func (hv *Hyperviser) stopTest(useLocks bool) {
+	DPrintf("hv (%s): stopTest", hv.ap.String())
 	if useLocks {
 		hv.mu.Lock()
 		defer hv.mu.Unlock()
 	}
 
+	DPrintf("hv (%s): stopTest: calling closeChords", hv.ap.String())
 	hv.closeChords()
+	DPrintf("hv (%s): stopTest: calling clear", hv.ap.String())
 	hv.ti.clear()
 }
 
@@ -332,9 +337,10 @@ func (hv *Hyperviser) addChord(baseChNode *chordkv.Node) error {
 // METHOD ASSUMES THAT IT IS CALLED FROM A LOCKING CONTEXT.
 func (hv *Hyperviser) addChordBase(baseChNode *chordkv.Node) error {
 	if baseChNode != nil {
-		DPrintf("hv (%s): addChord: baseCh: %s", hv.ap.String(), baseChNode.String())
+		DPrintf("hv (%s): addChordBase: baseChNode = %s(%016x)", hv.ap.String(),
+			baseChNode.String(), baseChNode.Hash)
 	} else {
-		DPrintf("hv (%s): addChord: baseCh: nil", hv.ap.String())
+		DPrintf("hv (%s): addChordBase: baseChNode = nil", hv.ap.String())
 	}
 
 	// Ensure everything is initialized.
@@ -342,6 +348,7 @@ func (hv *Hyperviser) addChordBase(baseChNode *chordkv.Node) error {
 		hv.chkvs = new([]*chordkv.ChordKV)
 	}
 
+	DPrintf("hv (%s): addChordBase: calling chordkv.MakeChordKV", hv.ap.String())
 	chkv, err := chordkv.MakeChordKV(baseChNode)
 	if err != nil {
 		return err
@@ -404,6 +411,7 @@ func (hv *Hyperviser) initTest(numChords int) {
 		select {
 		case <-time.After(readyTimeout):
 			// Clean up everything.
+			DPrintf("hv (%s): initTest: clean up from readyTimeout", hv.ap.String())
 			hv.stopTest(true)
 		case <-hv.ti.killChan:
 			hv.stopTest(true)
@@ -442,6 +450,7 @@ func (hv *Hyperviser) executeTest(tt TestType, tNum int) {
 		hv.ti.lg.Printf("hv (%s): executeTest: RPC failed: %s", hv.ap.String(), err)
 	}
 
+	DPrintf("hv (%s): executeTest: calling stopTest", hv.ap.String())
 	hv.stopTest(true)
 }
 
@@ -476,6 +485,7 @@ func (hv *Hyperviser) StartTest(args *TestArgs, reply *struct{}) error {
 
 // AbortTest allows the test leader to stop the test if something goes wrong.
 func (hv *Hyperviser) AbortTest(args *AuthArgs, reply *struct{}) error {
+	DPrintf("hv (%s): AbortTest from %s", hv.ap.String(), args.AP.String())
 	hv.mu.Lock()
 	defer hv.mu.Unlock()
 	DPrintf("hv (%s): AbortTest from %s", hv.ap.String(), args.AP.String())
@@ -490,6 +500,7 @@ func (hv *Hyperviser) AbortTest(args *AuthArgs, reply *struct{}) error {
 	}
 
 	go writeBool(hv.ti.killChan)
+	DPrintf("hv (%s): AbortTest: calling stopTest", hv.ap.String())
 	hv.stopTest(false)
 
 	return nil
@@ -565,7 +576,7 @@ func (hv *Hyperviser) RemoveChord(args *RingModArgs, reply *struct{}) error {
 		}
 
 		if err := (*hv.chkvs)[j].Kill(); err != nil {
-			// TODO: if this happens, not clear how to handle state.
+			// TODO: if this happens, unclear how to handle state.
 			return fmt.Errorf("CloseChord failed: %s", err)
 		}
 
@@ -677,6 +688,7 @@ func (hv *Hyperviser) initServers(targetNodes int) *map[AddrPair]*serverInfo {
 // useParentLock is true, acquire hv.mu.Lock before running. Otherwise, assume
 // that lock has already been acquired.
 func (hv *Hyperviser) cleanLeader(useParentLock bool) {
+	DPrintf("hv (%): cleanLeader", hv.ap.String())
 	if useParentLock {
 		DPrintf("hv (%s): cleanLeader about to lock", hv.ap.String())
 		hv.mu.Lock()
@@ -687,10 +699,8 @@ func (hv *Hyperviser) cleanLeader(useParentLock bool) {
 		return
 	}
 
-	DPrintf("hv (%s): cleanLeader about to lock hv.ls.mu", hv.ap.String())
 	hv.ls.mu.Lock()
 	defer hv.ls.mu.Unlock()
-	DPrintf("hv (%s): cleanLeader after lock", hv.ap.String())
 
 	for ap, info := range *hv.ls.servers {
 		if info.status != testingSt {
@@ -769,6 +779,7 @@ func (hv *Hyperviser) prepareLeader() {
 // sendStart used to call start test in other thread.
 func (hv *Hyperviser) sendStart(ap AddrPair, info *serverInfo, logName string) {
 	DPrintf("hv (%s): sendStart", hv.ap.String())
+	info.status = testingSt
 	args := TestArgs{
 		AA:            hv.makeAuthArgs(),
 		TType:         hv.ti.testType,
@@ -785,9 +796,9 @@ func (hv *Hyperviser) sendStart(ap AddrPair, info *serverInfo, logName string) {
 			hv.ap.String(), ap.String(), err)
 		hv.ls.lg.Printf("sendStart: RPC to %s failed: %s", ap.String(), err)
 		info.status = unresponsiveSt
-	} else {
-		info.status = testingSt
 	}
+
+	DPrintf("hv (%s): sendStart: releasing locks", hv.ap.String())
 	hv.ls.mu.Unlock()
 	hv.mu.Unlock()
 }
@@ -809,6 +820,7 @@ func (hv *Hyperviser) startLeaderTest() {
 	DPrintf("hv (%s): startLeaderTest: calling doneWg.Done()", hv.ap.String())
 	hv.ls.doneWg.Done()
 	hv.ls.mu.Unlock()
+	DPrintf("hv (%s): startLeaderTest: exiting", hv.ap.String())
 }
 
 // StartLeader runs the given test as the leader.
@@ -837,10 +849,16 @@ func (hv *Hyperviser) StartLeader(testType TestType, leaderLog, testLog string) 
 	// It is safe to unlock here because RPC calls use isLeader and isReady to
 	// determine whether to run.
 	hv.mu.Unlock()
-	defer hv.stopTest(true)
+	defer func() {
+		DPrintf("hv (%s): StartLeader: calling stopTest on exit", hv.ap.String())
+		hv.stopTest(true)
+	}()
 
 	hv.ls = &leaderState{}
-	defer hv.cleanLeader(true)
+	defer func() {
+		DPrintf("hv (%s): StartLeader: calling cleanLeader on exit", hv.ap.String())
+		hv.cleanLeader(true)
+	}()
 
 	// Set up log files.
 	f, err := os.Create(hv.logDir + leaderLog)
@@ -954,6 +972,8 @@ func (hv *Hyperviser) StartLeader(testType TestType, leaderLog, testLog string) 
 
 		// Clean up leader
 		hv.mu.Lock()
+		DPrintf("hv (%s): StartLeader: calling choseChords after successful test",
+			hv.ap.String())
 		hv.closeChords()
 		hv.mu.Unlock()
 	}
@@ -990,12 +1010,15 @@ func (hv *Hyperviser) Ready(args *AuthArgs, reply *struct{}) error {
 
 	info.status = readySt
 	hv.ls.readyWg.Done()
+	DPrintf("hv (%s): Ready (%s): return success", hv.ap.String(), args.AP.String())
 	return nil
 }
 
 // Done called by test followers when they are done running their test.
 func (hv *Hyperviser) Done(args *AuthArgs, reply *struct{}) error {
+	DPrintf("hv (%s): Done (%s)", hv.ap.String(), args.AP.String())
 	hv.mu.Lock()
+	DPrintf("hv (%s): Done (%s): locks1 acquired", hv.ap.String(), args.AP.String())
 	if err := hv.validate(args); err != nil {
 		hv.mu.Unlock()
 		return err
@@ -1014,15 +1037,22 @@ func (hv *Hyperviser) Done(args *AuthArgs, reply *struct{}) error {
 	}
 	hv.mu.Unlock()
 
+	DPrintf("hv (%s): Done (%s): getting second locks", hv.ap.String(),
+		args.AP.String())
 	hv.ls.mu.Lock()
 	defer hv.ls.mu.Unlock()
+	DPrintf("hv (%s): Done (%s): locks2 acquired", hv.ap.String(),
+		args.AP.String())
 
 	info := (*hv.ls.servers)[args.AP]
 	if info.status != testingSt {
-		return fmt.Errorf("Called at wrong time: %s", info.status)
+		DPrintf("hv (%s): Done (%s): info.status (%s) != testingSt (%s)",
+			hv.ap.String(), args.AP.String(), info.status, testingSt)
+		return fmt.Errorf("Called at wrong time: current status is %s", info.status)
 	}
 
 	info.status = doneSt
+	DPrintf("hv (%s): Done: updating doneWg", hv.ap.String())
 	hv.ls.doneWg.Done()
 	return nil
 }
@@ -1035,6 +1065,8 @@ type FailArgs struct {
 
 // Failed called by test followers if their test failed for some reason.
 func (hv *Hyperviser) Failed(args *FailArgs, reply *struct{}) error {
+	DPrintf("hv (%s): Failed from %s: %s", hv.ap.String(), args.AA.AP.String(),
+		args.Reason)
 	hv.mu.Lock()
 	if err := hv.validate(args.AA); err != nil {
 		hv.mu.Unlock()
@@ -1065,6 +1097,7 @@ func (hv *Hyperviser) Failed(args *FailArgs, reply *struct{}) error {
 	hv.ls.lg.Printf("Node %s test failed: %s",
 		args.AA.AP.String(), args.Reason)
 	info.status = failedSt
+	DPrintf("hv (%s): Failed: updating doneWg", hv.ap.String())
 	hv.ls.doneWg.Done()
 	return nil
 }
@@ -1111,7 +1144,9 @@ func makePort(ip, pass, logDir string, port int) (*Hyperviser, error) {
 
 // Stop Hyperviser.
 func (hv *Hyperviser) Stop(useLocks bool) {
+	DPrintf("hv (%s): Stop", hv.ap.String())
 	if useLocks {
+		DPrintf("hv (%s): Stop: getting lock", hv.ap.String())
 		hv.mu.Lock()
 		defer hv.mu.Unlock()
 	}
@@ -1121,25 +1156,31 @@ func (hv *Hyperviser) Stop(useLocks bool) {
 	}
 
 	if hv.ti.isLeader {
+		DPrintf("hv (%s): Stop: calling cleanLeader", hv.ap.String())
 		hv.cleanLeader(false)
 	}
 
 	if hv.ti.isTesting {
+		DPrintf("hv (%s): Stop: calling stopTest", hv.ap.String())
 		hv.stopTest(false)
 	}
 
+	DPrintf("hv (%s): Stop: closing servListner", hv.ap.String())
 	hv.servListener.Close()
 	hv.isRunning = false
+	DPrintf("hv (%s): Stop: exiting", hv.ap.String())
 }
 
 // Kill shuts down the Hyperviser.
 func (hv *Hyperviser) Kill(args *AuthArgs, reply *struct{}) error {
+	DPrintf("hv (%s): Kill from %s", hv.ap.String(), args.AP.String())
 	hv.mu.Lock()
 	defer hv.mu.Unlock()
 	if err := hv.validate(args); err != nil {
 		return err
 	}
 
+	DPrintf("hv (%s): Kill: calling Stop", hv.ap.String())
 	hv.Stop(false)
 	return nil
 }
@@ -1191,7 +1232,7 @@ func lookupPerf(hv *Hyperviser) error {
 	// Only sends one set of requests per physical site, so same node
 	// for everything.
 	ch := (*hv.chkvs)[0].Ch
-	var outErr error = nil
+	var outErr error
 	for i := 0; i < numRequests; i++ {
 		r := generateKey()
 		_, info, err := ch.Lookup(r)
