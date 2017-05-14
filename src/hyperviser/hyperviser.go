@@ -1130,7 +1130,7 @@ func makePort(ip, pass, logDir string, port int) (*Hyperviser, error) {
 	var err error
 
 	// Workaround for AWS public vs private IP address configuration
-	hv.servListener, err = net.Listen("tcp", fmt.Sprintf(":%s", port))
+	hv.servListener, err = net.Listen("tcp", fmt.Sprintf(":%d", port))
 	if err != nil {
 		return nil, err
 	}
