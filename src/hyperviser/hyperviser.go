@@ -25,7 +25,7 @@ const defaultPort = 8888
 const readyTimeout time.Duration = 5 * time.Minute
 
 // Maximum amount of time to wait for RPC to return.
-const rpcTimeout time.Duration = 30 * time.Second
+const rpcTimeout time.Duration = 10 * time.Second
 
 // AddrPair stores IP and Port.
 type AddrPair struct {
