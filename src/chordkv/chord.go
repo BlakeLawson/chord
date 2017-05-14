@@ -308,8 +308,8 @@ func (ch *Chord) stabilizeImpl() {
 		return
 	}
 	if err != nil {
-		DPrintf("chord [%s]: Notify(%s) failed: %s\n", ch.n.String(),
-			ch.ftable[0].String(), err)
+		DPrintf("chord [%s]: Notify(%s) failed: %s\n",
+			ch.n.String(), succ.String(), err)
 	}
 }
 

@@ -287,7 +287,7 @@ func (hv *Hyperviser) PrepareTest(args *TestArgs, reply *struct{}) error {
 	hv.ti.tNum++
 
 	// Add random delay before start to avoid overloading leader
-	r := rand.Intn(1000)
+	r := rand.Intn(1500)
 	time.Sleep(time.Millisecond * time.Duration(r))
 
 	// Prepare the test.
@@ -374,6 +374,10 @@ func (hv *Hyperviser) addChordBase(baseChNode *chordkv.Node) error {
 		return err
 	}
 	*hv.chkvs = append(*hv.chkvs, chkv)
+
+	n := chkv.Ch.GetNode()
+	DPrintf("hv (%s): addChordBase: made chord %s(%016x)",
+		hv.ap.String(), n.String(), n.Hash)
 
 	if debug {
 		n := chkv.Ch.GetNode()
@@ -822,7 +826,6 @@ func (hv *Hyperviser) sendStart(ap AddrPair, info *serverInfo, logName string) {
 		info.status = unresponsiveSt
 	}
 
-	DPrintf("hv (%s): sendStart: releasing locks", hv.ap.String())
 	hv.ls.mu.Unlock()
 	hv.mu.Unlock()
 }

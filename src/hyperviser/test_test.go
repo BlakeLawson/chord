@@ -18,12 +18,10 @@ var testLogDir = os.Getenv("GOPATH") + "/src/hyperviser/logs/"
 
 func setup() {
 	// Configure to run tests with localhost addresses.
-	p1, _ := port.New()
-	p2, _ := port.New()
-
-	serverAddrs = map[AddrPair]bool{
-		AddrPair{"127.0.0.1", p1}: true,
-		AddrPair{"127.0.0.1", p2}: true,
+	serverAddrs = make(map[AddrPair]bool)
+	for i := 0; i < 10; i++ {
+		p, _ := port.New()
+		serverAddrs[AddrPair{"127.0.0.1", p}] = true
 	}
 }
 
