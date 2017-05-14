@@ -32,7 +32,9 @@ func MakeChordKV(ip string, existingNode *Node) (*ChordKV, error) {
 	}
 
 	DPrintf("MakeChordKVDbg: calling startRPC")
-	rpcs, err := startRPC(ch, kvs, fmt.Sprintf("%s:0", ip))
+	// Ignore given IP for initialization because AWS uses annoying configuration
+	// with different public and private IP addresses.
+	rpcs, err := startRPC(ch, kvs, ":0")
 	if err != nil {
 		return nil, fmt.Errorf("RPCServer initialilzation failed: %s", err)
 	}

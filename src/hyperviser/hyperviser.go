@@ -1128,7 +1128,9 @@ func makePort(ip, pass, logDir string, port int) (*Hyperviser, error) {
 
 	// TODO: Add TLS
 	var err error
-	hv.servListener, err = net.Listen("tcp", hv.ap.String())
+
+	// Workaround for AWS public vs private IP address configuration
+	hv.servListener, err = net.Listen("tcp", fmt.Sprintf(":%s", port))
 	if err != nil {
 		return nil, err
 	}
