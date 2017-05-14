@@ -61,6 +61,7 @@ func printFlagErrorMessage() {
 	fmt.Printf("\t-testDir, -d\n\t\t%s\n", dirHelp)
 	fmt.Printf("\t-leaderfile, -lf\n\t\t%s\n", lLogHelp)
 	fmt.Printf("\t-testfile, -tl\n\t\t%s\n", tLogHelp)
+	fmt.Printf("\t-ip\n\t\t%s", ipHelp)
 	fmt.Printf("\t-verbose, -v\n\t\t%s\n", vHelp)
 }
 
