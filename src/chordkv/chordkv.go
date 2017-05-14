@@ -3,7 +3,6 @@
 package chordkv
 
 import (
-	"extip"
 	"fmt"
 	"net"
 	"strconv"
@@ -22,34 +21,18 @@ type ChordKV struct {
 // MakeChordKV returns fully initialized chord instance and associated rpc
 // server and kv server. Takes existingNode to initialize with an existing
 // chord ring. If existingNode is nil, creates new chord ring.
-func MakeChordKV(existingNode *Node) (*ChordKV, error) {
-	return MakeChordKVDbg(existingNode, false)
-}
-
-// MakeChordKVDbg is the same as MakeChordKV, but allows user to specify
-// whether to use localhost instead of actual IP addresses. Used for testing.
-func MakeChordKVDbg(existingNode *Node, useLocalhost bool) (*ChordKV, error) {
+func MakeChordKV(ip string, existingNode *Node) (*ChordKV, error) {
 	// Placeholders for RPCServer initialization
 	ch := &Chord{}
 	kvs := &KVServer{}
 
-	// Get the IP at the start because there is no point continuing if this fails.
-	DPrintf("MakeChordKVDbg: getting externalIP")
-	ip, err := extip.ExternalIP()
-	if err != nil {
-		return nil, fmt.Errorf("Could not find IP: %s", err)
-	}
-
-	// Initialize RPCServer with port 0 so OS picks the port.
-	var addr string
-	if useLocalhost {
-		addr = "127.0.0.1:0"
-	} else {
-		addr = ":0"
+	// Validate IP
+	if ok := net.ParseIP(ip); ok == nil {
+		return nil, fmt.Errorf("IP addr invalid: %s", ip)
 	}
 
 	DPrintf("MakeChordKVDbg: calling startRPC")
-	rpcs, err := startRPC(ch, kvs, addr)
+	rpcs, err := startRPC(ch, kvs, fmt.Sprintf("%s:0", ip))
 	if err != nil {
 		return nil, fmt.Errorf("RPCServer initialilzation failed: %s", err)
 	}

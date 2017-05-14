@@ -353,7 +353,7 @@ func (hv *Hyperviser) addChordBase(baseChNode *chordkv.Node) error {
 	}
 
 	DPrintf("hv (%s): addChordBase: calling chordkv.MakeChordKV", hv.ap.String())
-	chkv, err := chordkv.MakeChordKV(baseChNode)
+	chkv, err := chordkv.MakeChordKV(hv.ap.IP, baseChNode)
 	if err != nil {
 		return err
 	}
@@ -1109,10 +1109,10 @@ func (hv *Hyperviser) Failed(args *FailArgs, reply *struct{}) error {
 
 // Make a new Hyperviser.
 func Make(ip, pass, logDir string) (*Hyperviser, error) {
-	p1, _ := port.New()
-	serverAddrs = map[AddrPair]bool{
-		AddrPair{"127.0.0.1", p1}: true,
+	if ok := net.ParseIP(ip); ok == nil {
+		return nil, fmt.Errorf("Invalid IP address: %s", ip)
 	}
+
 	return makePort(ip, pass, logDir, defaultPort)
 }
 

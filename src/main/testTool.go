@@ -3,7 +3,6 @@
 package main
 
 import (
-	"extip"
 	"flag"
 	"fmt"
 	"hyperviser"
@@ -18,6 +17,7 @@ var (
 	testDirPath   string
 	leaderLogFile string
 	testLogFile   string
+	ipAddr        string
 )
 
 const (
@@ -28,6 +28,7 @@ const (
 	lLogHelp = "Name of leader log file"
 	tLogHelp = "Name of test log file"
 	vHelp    = "More expressive output"
+	ipHelp   = "IP address of the current server"
 )
 
 func init() {
@@ -38,6 +39,9 @@ func init() {
 	flag.StringVar(&leaderLogFile, "leaderfile", "", lLogHelp)
 	flag.StringVar(&testLogFile, "testfile", "", tLogHelp)
 	flag.BoolVar(&verbose, "verbose", false, vHelp)
+
+	// TODO: there needs to be a better way to handle IPs
+	flag.StringVar(&ipAddr, "ip", "", ipHelp)
 
 	flag.StringVar(&testType, "t", "", tHelp)
 	flag.StringVar(&password, "p", "", pHelp)
@@ -73,7 +77,7 @@ func main() {
 	}
 
 	// TODO: More robust checks?
-	if password == "" {
+	if password == "" || ipAddr == "" {
 		fmt.Println("Invalid usage")
 		printFlagErrorMessage()
 		return
@@ -85,13 +89,7 @@ func main() {
 		return
 	}
 
-	ip, err := extip.ExternalIP()
-	if err != nil {
-		fmt.Printf("Get IP address failed: %s\n", err.Error())
-		return
-	}
-
-	hv, err := hyperviser.Make(ip, password, testDirPath)
+	hv, err := hyperviser.Make(ipAddr, password, testDirPath)
 
 	if err != nil {
 		fmt.Printf("Hyperviser initialization failed: %s\n", err.Error())
