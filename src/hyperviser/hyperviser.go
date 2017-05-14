@@ -56,8 +56,10 @@ func (ap *AddrPair) Validate() error {
 }
 
 // Store known server IP addresses. Used by test leader to coordinate.
-// TODO: Update when we have real servers.
-var serverAddrs = map[AddrPair]bool{}
+var serverAddrs = map[AddrPair]bool{
+	AddrPair{"54.191.191.206", defaultPort}: true,
+	AddrPair{"54.187.20.229", defaultPort}:  true,
+}
 
 type testInfo struct {
 	tNum      int
