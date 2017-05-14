@@ -25,7 +25,7 @@ const defaultPort = 8888
 const readyTimeout time.Duration = 5 * time.Minute
 
 // Maximum amount of time to wait for RPC to return.
-const rpcTimeout time.Duration = 20 * time.Second
+const rpcTimeout time.Duration = 30 * time.Second
 
 // AddrPair stores IP and Port.
 type AddrPair struct {
@@ -948,8 +948,8 @@ func (hv *Hyperviser) StartLeader(testType TestType, leaderLog, testLog string) 
 			hv.ls.readyWg.Wait()
 			waitChan <- true
 		}()
-		timeout := 30 * time.Second*time.Duration(info.targetNumChs)
-		DPrintf("timeout: %d", timeout/time.Second)
+		timeout := time.Minute*time.Duration(info.targetNumChs)
+		DPrintf("timeout: %ds", timeout/time.Second)
 		select {
 		case <-time.After(timeout):
 			msg := "Timeout before servers ready"
@@ -1237,7 +1237,7 @@ type testConfig struct {
 var tests = map[TestType]testConfig{
 	LookupPerf: testConfig{
 		// phases:  []int{10, 30, 60, 90, 120, 150, 180, 200},
-		phases:  []int{30, 60, 90, 120, 150, 180, 200},
+		phases:  []int{60, 90, 120, 150, 180, 200},
 		f:       lookupPerf,
 		timeout: 3 * time.Minute},
 	HelloWorld: testConfig{
