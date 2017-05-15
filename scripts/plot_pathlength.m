@@ -23,8 +23,8 @@ x = [10 30];
 figure(1)
 errorbar(x, all_mean, p1, p99,'vertical', 'xk')
 axis([5 35 -1  6])
-title('Path Length vs. Number of Nodes (Iterative Lookups)')
+title('Iterative Lookups Between Data Centers')
 xlabel('Number of Nodes')
-ylabel('Path Length')
+ylabel('Path Length (number of hops)')
 
 cd(currDir)

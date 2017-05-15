@@ -32,7 +32,7 @@ x = [10 30];
 figure(2)
 errorbar(x, all_mean, p1, p99,'vertical', 'xk')
 axis([5 35 -25 700])
-title('Latency vs. Number of Nodes (Iterative lookups)')
+title('Iterative Lookups between Data Centers')
 xlabel('Number of Nodes')
 ylabel('Latency (s)')
 
