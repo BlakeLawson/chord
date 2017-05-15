@@ -86,20 +86,27 @@ func initializeChordRing(size int) error {
 	// Initialization phase.
 	for i := 1; i < size; i++ {
 		n = MakeNode(localhost, basePort+i)
-		chordInstances[i], err = MakeChord(n, chordInstances[0].n, false)
-		if err != nil {
-			return fmt.Errorf("Chord[%d] initiailzation failed: %s", i, err)
-		}
 
-		rpcInstances[i], err = startRPC(chordInstances[i], sharedKV, n.String())
+		// Use dummyCh to initialize RPC server before calling MakeChord
+		dummyCh := &Chord{}
+		rpcInstances[i], err = startRPC(dummyCh, sharedKV, n.String())
 		if err != nil {
 			chordInstances[i].Kill()
 			return fmt.Errorf("RPCServer[%d] initialization failed: %s", i, err)
 		}
-
-		// End chord instance before server
 		defer rpcInstances[i].End()
+		rpcInstances[i].initBarrier.Lock()
+
+		chordInstances[i], err = MakeChord(n, chordInstances[0].n, false)
+		if err != nil {
+			rpcInstances[i].initBarrier.Unlock()
+			return fmt.Errorf("Chord[%d] initiailzation failed: %s", i, err)
+		}
 		defer chordInstances[i].Kill()
+
+		rpcInstances[i].ch = chordInstances[i]
+		rpcInstances[i].initBarrier.Unlock()
+
 		DPrintf("Initialized chord[%s] (%016x)", chordInstances[i].n.String(),
 			chordInstances[i].n.Hash)
 
@@ -187,7 +194,7 @@ func TestChordThreeInitialization(t *testing.T) {
 // many open files". There's a way to adjust the maximum number of files you
 // can have open at once, but Blake hasn't tried it yet.
 func TestChordManyInitialization(t *testing.T) {
-	testSize := 8
+	testSize := 50
 	fmt.Printf("Test: Chord %d initializations ...\n", testSize)
 	err := initializeChordRing(testSize)
 	if err != nil {
@@ -325,7 +332,7 @@ func initChordFromNode(n Node) *Chord {
 	ch.ftable = make([]Node, ftableSize)
 	ch.isRunning = false
 	ch.killStabilizeChan = nil
-	ch.respChanMap = make(map[int]chan *LookupResult)
+	ch.respChanMap = make(map[int]chan LookupResult)
 	return ch
 }
 

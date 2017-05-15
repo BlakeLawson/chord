@@ -91,7 +91,7 @@ type ChordLookupReply struct {
 // on this RPCServer.
 func (rpcs *RPCServer) ChordLookup(args *ChordLookupArgs, reply *ChordLookupReply) error {
 	rpcs.checkInit()
-	DPrintf("ch [%s]: ChordLookup for %016x", rpcs.ch.n.String(), args.H)
+	DPrintf("ch [%016x]: ChordLookup for %016x", rpcs.ch.n.Hash, args.H)
 	rCh, info, err := rpcs.ch.Lookup(args.H)
 	if err != nil {
 		return err
@@ -112,8 +112,11 @@ type GetPredReply struct {
 
 // GetPred returns the predecessor of the Chord instance on this server.
 func (rpcs *RPCServer) GetPred(args *GetPredArgs, reply *GetPredReply) error {
+	DPrintf("ch [%016x]: GetPred called", rpcs.ch.n.Hash)
 	rpcs.checkInit()
+	DPrintf("ch [%016x]: GetPred waiting on rpc lock", rpcs.ch.n.Hash)
 	rpcs.ch.mu.Lock()
+	DPrintf("ch [%016x]: GetPred got rpc lock", rpcs.ch.n.Hash)
 	reply.N = rpcs.ch.predecessor
 	rpcs.ch.mu.Unlock()
 	return nil
@@ -280,7 +283,8 @@ type LookupResultReply interface{}
 func (rpcs *RPCServer) ReceiveLookupResult(args *LookupResultArgs, reply *LookupResultReply) error {
 	rpcs.checkInit()
 	result := deserializeChord(&args.ChFields)
-	return rpcs.ch.receiveLookUpResult(result, args.RID, args.Hops)
+	res := LookupResult{args.RID, result, args.Hops, nil}
+	return rpcs.ch.receiveLookUpResult(res)
 }
 
 // UpdateFtableArgs are arguments to UpdateFtable.
