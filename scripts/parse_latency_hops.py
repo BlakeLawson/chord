@@ -33,6 +33,7 @@ def aggregateFiles(outPath, inPaths):
 def main():
     distinct_inPaths = {}
     shared_inPaths = {}
+    recursive_inPaths = {}
     outPath = {}
 
     for root, dirs, files in os.walk('../data'):
@@ -42,6 +43,8 @@ def main():
                 inPaths = distinct_inPaths
             elif "shared" in root:
                 inPaths = shared_inPaths
+            elif "recursive" in root:
+                inpaths = recursive_inPaths
 
             for f_in in files:
                 if f_in not in inPaths:
@@ -57,6 +60,9 @@ def main():
         print "Aggregating" + testName
         aggregateFiles("../data/" + "shared-lookup-" + testName + ".csv", paths)
 
+    for testName, paths in shared_inPaths.items():
+        print "Aggregating" + testName
+        aggregateFiles("../data/" + "recursive-lookup-" + testName + ".csv", paths)
 
 
 
