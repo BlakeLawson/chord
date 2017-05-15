@@ -22,7 +22,7 @@ const defaultPort = 8888
 
 // Maximum amount of time to wait between leader calling testConfig and
 // receiving the call to start the test.
-const readyTimeout time.Duration = time.Minute
+const readyTimeout time.Duration = 3 * time.Minute
 
 // Maximum amount of time to wait for RPC to return.
 const rpcTimeout time.Duration = 10 * time.Second
@@ -1240,7 +1240,7 @@ var tests = map[TestType]testConfig{
 	LookupPerf: testConfig{
 		phases:  []int{10, 30, 60, 90, 120, 150, 180, 200},
 		f:       lookupPerf,
-		timeout: 3 * time.Minute},
+		timeout: 5 * time.Minute},
 	HelloWorld: testConfig{
 		phases:  []int{2, 4, 7, 10, 20, 50},
 		f:       helloWorld,
