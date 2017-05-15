@@ -57,16 +57,16 @@ func (ap *AddrPair) Validate() error {
 
 // Store known server IP addresses. Used by test leader to coordinate.
 var serverAddrs = map[AddrPair]bool{
-	AddrPair{"52.206.156.10", defaultPort}:  true,
+	AddrPair{"52.206.156.10", defaultPort}:   true,
 	AddrPair{"54.236.111.229", defaultPort}:  true,
-	AddrPair{"34.207.213.222", defaultPort}:   true,
-	AddrPair{"54.173.83.61", defaultPort}:   true,
-	AddrPair{"34.201.216.12", defaultPort}:  true,
+	AddrPair{"34.207.213.222", defaultPort}:  true,
+	AddrPair{"54.173.83.61", defaultPort}:    true,
+	AddrPair{"34.201.216.12", defaultPort}:   true,
 	AddrPair{"204.236.252.178", defaultPort}: true,
 	AddrPair{"54.84.165.65", defaultPort}:    true,
-	AddrPair{"54.196.111.209", defaultPort}:    true,
-	AddrPair{"34.207.232.240", defaultPort}:   true,
-	AddrPair{"54.165.61.233", defaultPort}:    true,
+	AddrPair{"54.196.111.209", defaultPort}:  true,
+	AddrPair{"34.207.232.240", defaultPort}:  true,
+	AddrPair{"54.165.61.233", defaultPort}:   true,
 }
 
 type testInfo struct {
@@ -306,9 +306,9 @@ func (hv *Hyperviser) stopTest(useLocks bool) {
 		defer hv.mu.Unlock()
 	}
 
-	DPrintf("hv (%s): stopTest: calling closeChords", hv.ap.String())
+	// DPrintf("hv (%s): stopTest: calling closeChords", hv.ap.String())
 	hv.closeChords()
-	DPrintf("hv (%s): stopTest: calling clear", hv.ap.String())
+	// DPrintf("hv (%s): stopTest: calling clear", hv.ap.String())
 	hv.ti.clear()
 }
 
@@ -693,7 +693,7 @@ func (hv *Hyperviser) initServers(targetNodes int) *map[AddrPair]*serverInfo {
 			status:       uninitializedSt,
 			numChs:       0,
 			targetNumChs: nodesPerServer}
-		count++
+		count--
 	}
 
 	// Assign remaining nodes.
@@ -714,7 +714,7 @@ func (hv *Hyperviser) initServers(targetNodes int) *map[AddrPair]*serverInfo {
 func (hv *Hyperviser) cleanLeader(useParentLock bool) {
 	DPrintf("hv (%s): cleanLeader", hv.ap.String())
 	if useParentLock {
-		DPrintf("hv (%s): cleanLeader about to lock", hv.ap.String())
+		// DPrintf("hv (%s): cleanLeader about to lock", hv.ap.String())
 		hv.mu.Lock()
 		defer hv.mu.Unlock()
 	}
@@ -765,8 +765,7 @@ func (hv *Hyperviser) sendPrepare(ap AddrPair, info *serverInfo, logName string)
 	if err != nil {
 		DPrintf("hv (%s): sendPrepare: RPC to %s failed: %s",
 			hv.ap.String(), ap.String(), err)
-		hv.ls.lg.Printf("sendPrepare: RPC to %s failed: %s",
-			hv.ap.String(), ap.String(), err)
+		hv.ls.lg.Printf("sendPrepare: RPC to %s failed: %s", ap.String(), err)
 	}
 
 	hv.mu.Lock()
@@ -877,13 +876,13 @@ func (hv *Hyperviser) StartLeader(testType TestType, leaderLog, testLog string) 
 	// determine whether to run.
 	hv.mu.Unlock()
 	defer func() {
-		DPrintf("hv (%s): StartLeader: calling stopTest on exit", hv.ap.String())
+		// DPrintf("hv (%s): StartLeader: calling stopTest on exit", hv.ap.String())
 		hv.stopTest(true)
 	}()
 
 	hv.ls = &leaderState{}
 	defer func() {
-		DPrintf("hv (%s): StartLeader: calling cleanLeader on exit", hv.ap.String())
+		// DPrintf("hv (%s): StartLeader: calling cleanLeader on exit", hv.ap.String())
 		hv.cleanLeader(true)
 	}()
 
@@ -1181,7 +1180,7 @@ func makePort(ip, pass, logDir string, port int) (*Hyperviser, error) {
 func (hv *Hyperviser) Stop(useLocks bool) {
 	DPrintf("hv (%s): Stop", hv.ap.String())
 	if useLocks {
-		DPrintf("hv (%s): Stop: getting lock", hv.ap.String())
+		// DPrintf("hv (%s): Stop: getting lock", hv.ap.String())
 		hv.mu.Lock()
 		defer hv.mu.Unlock()
 	}
@@ -1191,19 +1190,19 @@ func (hv *Hyperviser) Stop(useLocks bool) {
 	}
 
 	if hv.ti.isLeader {
-		DPrintf("hv (%s): Stop: calling cleanLeader", hv.ap.String())
+		// DPrintf("hv (%s): Stop: calling cleanLeader", hv.ap.String())
 		hv.cleanLeader(false)
 	}
 
 	if hv.ti.isTesting {
-		DPrintf("hv (%s): Stop: calling stopTest", hv.ap.String())
+		// DPrintf("hv (%s): Stop: calling stopTest", hv.ap.String())
 		hv.stopTest(false)
 	}
 
-	DPrintf("hv (%s): Stop: closing servListner", hv.ap.String())
+	// DPrintf("hv (%s): Stop: closing servListner", hv.ap.String())
 	hv.servListener.Close()
 	hv.isRunning = false
-	DPrintf("hv (%s): Stop: exiting", hv.ap.String())
+	// DPrintf("hv (%s): Stop: exiting", hv.ap.String())
 }
 
 // Kill shuts down the Hyperviser.
@@ -1243,7 +1242,7 @@ var tests = map[TestType]testConfig{
 		f:       lookupPerf,
 		timeout: 3 * time.Minute},
 	HelloWorld: testConfig{
-		phases:  []int{1, 2, 4, 7, 10, 20, 50},
+		phases:  []int{2, 4, 7, 10, 20, 50},
 		f:       helloWorld,
 		timeout: 10 * time.Second},
 	KeyDist: testConfig{
