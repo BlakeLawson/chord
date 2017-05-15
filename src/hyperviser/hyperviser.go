@@ -1286,7 +1286,7 @@ func lookupPerf(hv *Hyperviser) error {
 	}
 
 	// Make sure all nodes have time to finish.
-	time.Sleep(30 * time.Second)
+	time.Sleep(time.Minute)
 	return outErr
 }
 
