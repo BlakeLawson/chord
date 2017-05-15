@@ -21,3 +21,6 @@ pkg
 #figures
 *.fig
 *.png
+
+# Tosin's backup gitignore
+.gitignore~
