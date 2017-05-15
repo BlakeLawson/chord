@@ -271,8 +271,8 @@ func TestChordInRangeUnit(t *testing.T) {
 	h = 0
 	max = 0
 	min = 0
-	if inRange(h, min, max) {
-		t.Fatalf("inRange should have failed. min should be excluded %d < %d < %d", min, h, max)
+	if !inRange(h, min, max) {
+		t.Fatalf("inRange should have failed. max should be included %d < %d < %d", min, h, max)
 	}
 
 	fmt.Println(" ... Passed")
