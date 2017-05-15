@@ -18,6 +18,3 @@ golang.org
 bin
 pkg
 
-#figures
-*.fig
-*.png
