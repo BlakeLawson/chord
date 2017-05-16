@@ -950,7 +950,7 @@ func (hv *Hyperviser) StartLeader(testType TestType, leaderLog, testLog string) 
 			hv.ls.readyWg.Wait()
 			waitChan <- true
 		}()
-		timeout := 10 * time.Second * time.Duration(info.targetNumChs)
+		timeout := 20 * time.Second * time.Duration(info.targetNumChs)
 		DPrintf("timeout: %ds", timeout/time.Second)
 		select {
 		case <-time.After(timeout):

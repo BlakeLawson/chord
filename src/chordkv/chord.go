@@ -13,7 +13,7 @@ import (
 )
 
 const (
-	isIterative      bool          = true
+	isIterative      bool          = false
 	sListSize        int           = 10
 	ftableSize       int           = 64
 	stabilizeTimeout time.Duration = 250 * time.Millisecond
