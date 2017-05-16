@@ -160,7 +160,7 @@ func (n *Node) RemoteForwardLookup(h UHash, source *Chord, rID, hops int) error 
 	args := &ForwardLookupArgs{
 		H:        h,
 		RID:      rID,
-		Hops:     hops + 1,
+		Hops:     hops,
 		ChFields: *serializeChord(source)}
 
 	var reply ForwardLookupReply

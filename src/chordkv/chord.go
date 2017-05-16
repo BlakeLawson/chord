@@ -111,9 +111,8 @@ func (ch *Chord) ForwardLookup(h UHash, source *Chord, rID, hops int) error {
 	closest := ch.FindClosestNode(h)
 
 	if ch.n.Hash != closest.Hash {
-		hops++
 		go func(n Node) {
-			if err := closest.RemoteForwardLookup(h, source, rID, hops); err != nil {
+			if err := closest.RemoteForwardLookup(h, source, rID, hops+1); err != nil {
 				DPrintf("ch [%016x]: ForwardLookup %d -> %016x: RemoteForwardLookup "+
 					"on %016x failed", n.Hash, rID, h, closest)
 			}
@@ -368,9 +367,6 @@ func inRange(key UHash, min UHash, max UHash) bool {
 		if key >= 0 && key <= max {
 			return true
 		}
-	}
-	if min == max {
-		return true
 	}
 
 	return false
